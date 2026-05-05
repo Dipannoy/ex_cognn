@@ -1,0 +1,36 @@
+#!/bin/sh
+#SBATCH --job-name=hse_eg_loop2_train_lu2_th_0.0_0210
+#SBATCH -N 1
+#SBATCH -n 14
+#SBATCH --gres=gpu:1 ## Run on 1 GPU
+#SBATCH --output hse_eg_loop2_train_lu2_th_0.0_0210.out
+#SBATCH --error hse_eg_loop2_train_lu2_th_0.0_0210.err
+#SBATCH -p v100-32gb-hiprio
+
+hostname
+date
+
+module load cuda/11.0
+module load python3/anaconda/2021.11
+source activate version
+
+python -u main.py \
+--root_dir 'datasets/ef_loop2_train_lu2' \
+--config_name 'config_eg_coalignn.json' \
+--dataset_name 'ef_train_loop2_test_lu2.pickle' \
+--target_file 'ef_loop2_train_id.csv' \
+--target_file2 'ef_lu2_id.csv' \
+--output_dir2 'ef_loop2_train_lu2_th_0.0' \
+--output_dir 'ef_loop2_train_lu2_th_0.0_0210' \
+--ang_layer 1 \
+--anlg_layer 0 \
+--aln_layer 0 \
+--gn_layer 2 \
+--target 'Ef' \
+--epochs 250 \
+--batch_size 32 \
+--edge_threshold 0.0 \
+--check_threshold false \
+--repeat 3 \
+--create_split true \
+

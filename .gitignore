@@ -1,0 +1,10 @@
+*.out
+*.err
+*.png
+*.sh
+*.pt
+*.bin
+*.ckpt
+*.pkl
+*.json
+*.csv
