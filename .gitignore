@@ -7,3 +7,4 @@
 *.ckpt
 *.pkl
 ./outputs
+./downloaded_results

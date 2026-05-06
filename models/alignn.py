@@ -542,8 +542,28 @@ class CoALIGNN(nn.Module):
                 self.out_act_graph_net = ActionNet_mean_gnn_node(self.num_act_graph_layers, 
                                                 input_node_dim, 2)
             elif(self.action_net == 'EdgeScoringNet'):
-                # Direct per-edge scorer: no in/out action nets needed
                 self.edge_scoring_net = EdgeScoringNet(
+                    node_dim=input_node_dim,
+                    edge_dim=input_node_dim,
+                    hidden_dim=input_node_dim,
+                    num_layers=max(self.num_act_graph_layers, 1),
+                )
+            elif(self.action_net == 'EdgeOnlyScoringNet'):
+                self.edge_scoring_net = EdgeOnlyScoringNet(
+                    node_dim=input_node_dim,
+                    edge_dim=input_node_dim,
+                    hidden_dim=input_node_dim,
+                    num_layers=max(self.num_act_graph_layers, 1),
+                )
+            elif(self.action_net == 'LearnableCutoffScoringNet'):
+                self.edge_scoring_net = LearnableCutoffScoringNet(
+                    node_dim=input_node_dim,
+                    edge_dim=input_node_dim,
+                    hidden_dim=input_node_dim,
+                    num_layers=max(self.num_act_graph_layers, 1),
+                )
+            elif(self.action_net == 'MultiplicativeGateScoringNet'):
+                self.edge_scoring_net = MultiplicativeGateScoringNet(
                     node_dim=input_node_dim,
                     edge_dim=input_node_dim,
                     hidden_dim=input_node_dim,
@@ -673,6 +693,8 @@ class CoALIGNN(nn.Module):
         # initial bond features
         bondlength = torch.norm(g.edata.pop("r"), dim=1)
         y = self.edge_embedding(bondlength)
+        # store raw bond lengths for LearnableCutoffScoringNet
+        g.edata['bond_lengths'] = bondlength
 
         survived_ratios = {'g': [], 'lg': [], 'slg': [], 'gcn': []}
         
@@ -743,9 +765,8 @@ class CoALIGNN(nn.Module):
                 x_act = x
                 temp = self.temp_model(g=g, edge_attr=y) if self.learn_temp else self.temp
 
-                if self.action_net == 'EdgeScoringNet':
-                    # Direct edge scoring: bond geometry flows straight into the decision
-                    # y encodes bond length via RBFExpansion — use it directly (not act_edge_embedding)
+                if self.action_net in ('EdgeScoringNet', 'EdgeOnlyScoringNet',
+                                       'LearnableCutoffScoringNet', 'MultiplicativeGateScoringNet'):
                     edge_logits = self.edge_scoring_net(g, x_act, y)  # [E, 2]
                     w_bonds = F.gumbel_softmax(logits=edge_logits, tau=temp, hard=is_hard)[:, 0]
                     in_gcn_logits = edge_logits   # store for downstream (shape [E,2], not [N,2])
@@ -991,4 +1012,89 @@ class EdgeScoringNet(nn.Module):
         src, dst = g.edges()
         edge_input = torch.cat([x[src], x[dst], y], dim=-1)
         return self.net(edge_input)
+
+
+class EdgeOnlyScoringNet(nn.Module):
+    """Ablation: per-edge scorer that ignores node features entirely.
+
+    Input is the edge embedding `e_ij` only (RBF-encoded bond length →
+    hidden_dim via edge_embedding).  If this variant produces better
+    bond-length separation than EdgeScoringNet it confirms that the large
+    node-feature contribution was drowning out the geometry signal.
+
+    Args: same signature as EdgeScoringNet for drop-in compatibility.
+    """
+
+    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int):
+        super().__init__()
+        layers: list = []
+        dim = edge_dim
+        for _ in range(num_layers - 1):
+            layers += [nn.Linear(dim, hidden_dim), nn.BatchNorm1d(hidden_dim), nn.SiLU()]
+            dim = hidden_dim
+        layers.append(nn.Linear(dim, 2))
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, g: dgl.DGLGraph, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return per-edge logits [E, 2]; x is unused."""
+        return self.net(y)
+
+
+class LearnableCutoffScoringNet(nn.Module):
+    """Learnable soft distance cutoff inspired by SchNet.
+
+    keep_logit(r) = (r_cut - r) / tau
+    Positive for bonds shorter than r_cut, negative for longer ones.
+    r_cut and tau are scalar learnable parameters.
+
+    Requires raw bond lengths stored in g.edata['bond_lengths'] (Angstrom).
+    Args: same signature as EdgeScoringNet for drop-in compatibility.
+    """
+
+    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int):
+        super().__init__()
+        self.r_cut = nn.Parameter(torch.tensor(3.5))   # initial cutoff ~3.5 Å
+        self.tau = nn.Parameter(torch.tensor(0.5))      # initial softness
+
+    def forward(self, g: dgl.DGLGraph, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return per-edge logits [E, 2]."""
+        r = g.edata['bond_lengths']   # [E]  (Angstrom)
+        logit = (self.r_cut.abs() - r) / self.tau.abs().clamp(min=0.05)
+        return torch.stack([logit, -logit], dim=-1)   # col-0 = keep, col-1 = drop
+
+
+class MultiplicativeGateScoringNet(nn.Module):
+    """Multiplicative distance-gate scorer inspired by DimeNet.
+
+    gate(e_ij)     = sigmoid(dist_mlp(e_ij))     — geometry-driven [0,1] gate
+    node_score(r)  = node_mlp([h_src || h_dst])   — chemistry-driven scalar
+    logit(r)       = gate * node_score             — geometry modulates chemistry
+
+    Short bonds produce large gate values, so the network is explicitly
+    biased to attend to chemically significant (short) bonds.
+    Args: same signature as EdgeScoringNet for drop-in compatibility.
+    """
+
+    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int):
+        super().__init__()
+        self.dist_gate = nn.Sequential(
+            nn.Linear(edge_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+            nn.Sigmoid(),
+        )
+        self.node_mlp = nn.Sequential(
+            nn.Linear(2 * node_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, g: dgl.DGLGraph, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return per-edge logits [E, 2]."""
+        src, dst = g.edges()
+        gate = self.dist_gate(y)                                           # [E, 1]
+        node_score = self.node_mlp(torch.cat([x[src], x[dst]], dim=-1))   # [E, 1]
+        logit = (gate * node_score).squeeze(-1)                            # [E]
+        return torch.stack([logit, -logit], dim=-1)                        # [E, 2]
 
