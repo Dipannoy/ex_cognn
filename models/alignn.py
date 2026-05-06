@@ -541,6 +541,14 @@ class CoALIGNN(nn.Module):
                                                 input_node_dim, 2)
                 self.out_act_graph_net = ActionNet_mean_gnn_node(self.num_act_graph_layers, 
                                                 input_node_dim, 2)
+            elif(self.action_net == 'EdgeScoringNet'):
+                # Direct per-edge scorer: no in/out action nets needed
+                self.edge_scoring_net = EdgeScoringNet(
+                    node_dim=input_node_dim,
+                    edge_dim=input_node_dim,
+                    hidden_dim=input_node_dim,
+                    num_layers=max(self.num_act_graph_layers, 1),
+                )
             else:
                 self.in_act_graph_net = ActionNet_mean_gnn_weighted(self.num_in_act_graph_layers, 
                                                 input_node_dim, 2)
@@ -731,53 +739,34 @@ class CoALIGNN(nn.Module):
         in_gcn_logits = None
         out_gcn_logits = None
         for gcn_layer in self.gcn_layers:
-            # Policy net for node states on Graph.
             if self.num_act_graph_layers > 0:
                 x_act = x
-                # x_act = self.act_atom_embedding(x)
-                y_act = self.act_edge_embedding(y)
-                if(self.action_net == 'ActionNet_mean_gnn_node'):
-                    in_gcn_logits = self.in_act_graph_net(g, x_act)  # (N, 2)
-                    out_gcn_logits = self.out_act_graph_net(g, x_act)  # (N, 2)
-                else:
-                    #in_gcn_logits,_ = self.in_act_graph_net(g, x_act, y_act)  # (N, 2)
-                    #out_gcn_logits,_ = self.out_act_graph_net(g, x_act, y_act)  # (N, 2)
-                    #in_gcn_logits,_ = self.in_act_graph_net(g, x_act, y_act)  # (N, 2)
-                    in_gcn_logits,_ = self.in_act_graph_net(g, x_act, y_act)   # (N, 2)
-                    out_gcn_logits,_ = self.out_act_graph_net(g, x_act, y_act) # (N, 2)
-                    
-
-                    
-                
-                #in_gcn_logits, _ = self.in_act_graph_net(g, x_act, y_act)  # (N, 2)
-                #out_gcn_logits, _ = self.out_act_graph_net(g, x_act, y_act)  # (N, 2)
-                #in_gcn_logits = self.in_act_graph_net(g, x_act, y_act)  # (N, 2)
-                #out_gcn_logits = self.out_act_graph_net(g, x_act, y_act)  # (N, 2)
-                #in_gcn_logits = self.in_act_graph_net(g, x_act)  # (N, 2)
-                #out_gcn_logits = self.out_act_graph_net(g, x_act)  # (N, 2)
-
                 temp = self.temp_model(g=g, edge_attr=y) if self.learn_temp else self.temp
-                w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
-                #w_bonds = self.get_edge_logits(g, in_gcn_logits, temp, is_hard)
-                #w_bonds = [0 if x<self.edge_threshold else x for x in w_bonds]
-                if(self.check_threshold==True):
-                    w_bonds[w_bonds<self.edge_threshold] = 0
 
-                src, dst = g.edges()
-	
-                '''
-                print("Source nodes:", src)
-                print("Destination nodes:", dst)                
-                print(w_bonds)
-                print(w_bonds.detach().sum())
-                num_edges = g.number_of_edges() 
-                print(f"Total number of edges: {num_edges}") 
-                '''
+                if self.action_net == 'EdgeScoringNet':
+                    # Direct edge scoring: bond geometry flows straight into the decision
+                    # y encodes bond length via RBFExpansion — use it directly (not act_edge_embedding)
+                    edge_logits = self.edge_scoring_net(g, x_act, y)  # [E, 2]
+                    w_bonds = F.gumbel_softmax(logits=edge_logits, tau=temp, hard=is_hard)[:, 0]
+                    in_gcn_logits = edge_logits   # store for downstream (shape [E,2], not [N,2])
+                    out_gcn_logits = None
+                elif self.action_net == 'ActionNet_mean_gnn_node':
+                    y_act = self.act_edge_embedding(y)
+                    in_gcn_logits = self.in_act_graph_net(g, x_act)   # [N, 2]
+                    out_gcn_logits = self.out_act_graph_net(g, x_act)  # [N, 2]
+                    w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
+                else:
+                    y_act = self.act_edge_embedding(y)
+                    in_gcn_logits, _ = self.in_act_graph_net(g, x_act, y_act)   # [N, 2]
+                    out_gcn_logits, _ = self.out_act_graph_net(g, x_act, y_act)  # [N, 2]
+                    w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
+
+                if self.check_threshold:
+                    w_bonds[w_bonds < self.edge_threshold] = 0
                 survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
-                """In a case of no action net, all edge weight is one."""
                 w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
-                           
+
             x, y = gcn_layer(g, x, y, w_bonds)
             if self.config.mask_before_next:
                 y = y * w_bonds
@@ -970,4 +959,36 @@ class ActionNet_mean_gnn_weighted(nn.Module):
         for layer in self.nets:
             x = layer(g, x, y)
         return x
+
+
+class EdgeScoringNet(nn.Module):
+    """Direct per-edge scoring from concatenated [h_src || h_dst || e_ij].
+
+    Unlike node-level action nets, bond geometry (encoded in edge features via
+    RBFExpansion) flows directly into the keep/drop decision, so the learned
+    edge weights are geometrically grounded and correlated with bond length.
+
+    Args:
+        node_dim:   dimension of node features
+        edge_dim:   dimension of edge features
+        hidden_dim: hidden layer width
+        num_layers: total MLP depth (including the final Linear → 2 layer)
+    """
+
+    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int):
+        super().__init__()
+        in_dim = 2 * node_dim + edge_dim
+        layers: list = []
+        dim = in_dim
+        for _ in range(num_layers - 1):
+            layers += [nn.Linear(dim, hidden_dim), nn.BatchNorm1d(hidden_dim), nn.SiLU()]
+            dim = hidden_dim
+        layers.append(nn.Linear(dim, 2))
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, g: dgl.DGLGraph, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return per-edge logits of shape [E, 2]."""
+        src, dst = g.edges()
+        edge_input = torch.cat([x[src], x[dst], y], dim=-1)
+        return self.net(edge_input)
 
