@@ -1,5 +1,6 @@
 """Module to train for a folder with formatted dataset."""
 import csv
+import fcntl
 import os
 import sys
 import time
@@ -87,7 +88,7 @@ def create_5_fold_CV(root_dir, target_file, output_dir):
         test_X.to_csv(output_dir+"/test_ids_"+str(fold)+".csv", index=False)
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
         target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
-        sparsity_weight=0.0, **kwargs):
+        sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', **kwargs):
     """Loader preparation"""
     if sub_dir is None:
         config_file = os.path.join(root_dir, config_name)
@@ -194,6 +195,36 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     tr_list.append(['test',np.mean(test_arr),np.std(test_arr)])
     df = pd.DataFrame(tr_list, columns=['sample', 'mean', 'std']) # Add column names if needed
     df.to_csv(config.output_dir+'/error.csv', index=False)
+
+    # Append a single row to the global results CSV (file-locked for concurrent jobs)
+    dataset_tag = os.path.basename(root_dir.rstrip('/'))
+    global_row = [
+        dataset_tag,
+        action_net,
+        float(edge_threshold),
+        float(sparsity_weight),
+        float(np.mean(tr_arr)),  float(np.std(tr_arr)),
+        float(np.mean(val_arr)), float(np.std(val_arr)),
+        float(np.mean(test_arr)),float(np.std(test_arr)),
+        output_dir,
+    ]
+    global_header = [
+        'dataset', 'action_net', 'threshold', 'sparsity_weight',
+        'train_mean', 'train_std',
+        'val_mean',   'val_std',
+        'test_mean',  'test_std',
+        'output_dir',
+    ]
+    os.makedirs(os.path.dirname(global_results_csv) or '.', exist_ok=True)
+    with open(global_results_csv, 'a', newline='') as gf:
+        fcntl.flock(gf, fcntl.LOCK_EX)
+        write_header = gf.tell() == 0
+        writer = csv.writer(gf)
+        if write_header:
+            writer.writerow(global_header)
+        writer.writerow(global_row)
+        fcntl.flock(gf, fcntl.LOCK_UN)
+    print(f'Global results appended to: {global_results_csv}')
 
 
     
@@ -357,6 +388,10 @@ if __name__ == "__main__":
         "--sparsity_weight", default=0.0, type=float,
         help="Sparsity regularization weight: penalizes mean edge weight to encourage action net to drop non-informative bonds.",
     )
+    parser.add_argument(
+        "--global_results_csv", default='outputs/global_results.csv',
+        help="Path to the shared CSV file where all experiments append their mean/std test error.",
+    )
       
     
     args = parser.parse_args(sys.argv[1:])
@@ -395,5 +430,5 @@ if __name__ == "__main__":
         logit_2 = args.logit_2,
         trim_graph_dir = args.trim_graph_dir,
         sparsity_weight = args.sparsity_weight,
-
+        global_results_csv = args.global_results_csv,
     )
