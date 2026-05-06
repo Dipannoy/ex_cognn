@@ -126,7 +126,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     tr_arr = []
     val_arr = []
     test_arr = []
-    create_5_fold_CV(root_dir,target_file,output_dir)
+    create_5_fold_CV(root_dir,target_file,config.output_dir)
 
     for l in range(0,repeat):
 
