@@ -87,7 +87,7 @@ def create_5_fold_CV(root_dir, target_file, output_dir):
         test_X.to_csv(output_dir+"/test_ids_"+str(fold)+".csv", index=False)
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
         target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
-         **kwargs):
+        sparsity_weight=0.0, **kwargs):
     """Loader preparation"""
     if sub_dir is None:
         config_file = os.path.join(root_dir, config_name)
@@ -110,7 +110,9 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.epochs = int(epochs)
     config.optim.scheduler.epochs = int(epochs)
     config.exp_name = exp_name
-    config.output_dir = output_dir
+    config.output_dir = os.path.join('outputs', output_dir)
+    os.makedirs(config.output_dir, exist_ok=True)
+    config.sparsity_weight = float(sparsity_weight)
     config.cutoff = int(cutoff)  
     config.max_neighbors = int(max_neighbors)
     config.neighbor_strategy = neighbor_strategy
@@ -351,6 +353,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--trim_graph_dir", default=None,  help="broadcasting graphs",
     )
+    parser.add_argument(
+        "--sparsity_weight", default=0.0, type=float,
+        help="Sparsity regularization weight: penalizes mean edge weight to encourage action net to drop non-informative bonds.",
+    )
       
     
     args = parser.parse_args(sys.argv[1:])
@@ -388,5 +394,6 @@ if __name__ == "__main__":
         logit_1 = args.logit_1,
         logit_2 = args.logit_2,
         trim_graph_dir = args.trim_graph_dir,
+        sparsity_weight = args.sparsity_weight,
 
     )

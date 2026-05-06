@@ -6,5 +6,4 @@
 *.bin
 *.ckpt
 *.pkl
-*.json
-*.csv
+./outputs

@@ -39,6 +39,7 @@ class Runner:
         self.loss_fn = self.criterion(config.criterion)
 
         self.max_bond_forcing = config.model.max_bond_forcing
+        self.sparsity_weight = getattr(config, 'sparsity_weight', 0.0)
         self.num_epochs = config.epochs
         self.step_count = 0
         self.gradient_means = defaultdict(list)
@@ -411,9 +412,11 @@ class Runner:
 
             context = torch.enable_grad() if epoch % 5 == 0 else torch.no_grad()
             
-            out, survived_edges,_,_,_ = self.model((g, lg), keep_bond_forcing, context, False)
-            loss = self.loss_fn(out, y)
-            avgloss += loss.detach().item() * ng
+            out, survived_edges, w_bonds, _, _ = self.model((g, lg), keep_bond_forcing, context, False)
+            task_loss = self.loss_fn(out, y)
+            sparsity_loss = self.sparsity_weight * w_bonds.mean() if self.sparsity_weight > 0 and w_bonds is not None else 0.
+            loss = task_loss + sparsity_loss
+            avgloss += task_loss.detach().item() * ng
             avg_se = self.cal_dict(survived_edges, avg_se, mul=ng)
 
             self.optimizer.zero_grad()
@@ -619,7 +622,8 @@ class Runner:
                         rem_index.append(k)
                     k=k+1
                 prob_dist = sm_edge_status[curr_position:curr_position+len(ug_bcast.edges()[0])]
-                prob_dict[g.gdata["jid"][i]] = {'key':key,'prop_dist':prob_dist.tolist()}
+                bond_lengths = torch.norm(ug.edata['r'], dim=1).cpu().tolist() if 'r' in ug.edata else []
+                prob_dict[g.gdata["jid"][i]] = {'key': key, 'prop_dist': prob_dist.tolist(), 'bond_lengths': bond_lengths}
                 
                 curr_position= curr_position+len(ug_bcast.edges()[0])
                 rem_tensor= torch.tensor(rem_index,device=self.device)
@@ -682,8 +686,79 @@ class Runner:
         with open(f"{self.config.output_dir}/{key}_{suffix}_prob_dict.json", 'w') as json_file:
             json.dump(prob_dict, json_file, indent=4)
 
+        self.plot_explainability(key, suffix)
         print("Finish prediction")
         return pred_dict, survived_edges, (mae_metric, mse_metric)
+
+    def plot_explainability(self, key, suffix):
+        """Generate edge-weight vs bond-length explainability plots for one split/fold."""
+        json_path = f"{self.config.output_dir}/{key}_{suffix}_prob_dict.json"
+        if not os.path.exists(json_path):
+            return
+        with open(json_path) as f:
+            prob_data = json.load(f)
+
+        all_weights, all_lengths = [], []
+        for jid, data in prob_data.items():
+            weights = data.get('prop_dist', [])
+            lengths = data.get('bond_lengths', [])
+            if len(weights) == len(lengths) and len(weights) > 0:
+                all_weights.extend(weights)
+                all_lengths.extend(lengths)
+
+        if not all_weights:
+            print(f"No bond-length data for explainability plot [{key}_{suffix}]")
+            return
+
+        all_weights = np.array(all_weights, dtype=float)
+        all_lengths = np.array(all_lengths, dtype=float)
+        threshold = self.config.model.edge_threshold
+
+        kept_mask = all_weights >= threshold
+        kept_lengths = all_lengths[kept_mask]
+        dropped_lengths = all_lengths[~kept_mask]
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+        # Scatter: edge weight vs bond length
+        axes[0].scatter(all_lengths, all_weights, alpha=0.2, s=2, c='steelblue')
+        axes[0].axhline(y=threshold, color='r', linestyle='--', label=f'threshold={threshold}')
+        axes[0].set_xlabel('Bond Length (\u00c5)')
+        axes[0].set_ylabel('Edge Weight')
+        axes[0].set_title(f'{key} [{suffix}] \u2014 Edge Weight vs Bond Length')
+        axes[0].legend()
+
+        # Histogram: bond length distribution kept vs dropped
+        axes[1].hist(kept_lengths, bins=50, alpha=0.6, density=True,
+                     label=f'Kept ({kept_mask.sum()})', color='steelblue')
+        axes[1].hist(dropped_lengths, bins=50, alpha=0.6, density=True,
+                     label=f'Dropped ({(~kept_mask).sum()})', color='tomato')
+        axes[1].set_xlabel('Bond Length (\u00c5)')
+        axes[1].set_ylabel('Density')
+        axes[1].set_title(f'{key} [{suffix}] \u2014 Bond Length: Kept vs Dropped')
+        axes[1].legend()
+
+        plt.tight_layout()
+        plot_path = f"{self.config.output_dir}/explainability_{key}_{suffix}.png"
+        plt.savefig(plot_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        print(f"Explainability plot saved: {plot_path}")
+
+        summary = {
+            'key': key,
+            'suffix': suffix,
+            'total_edges': int(len(all_weights)),
+            'kept_edges': int(kept_mask.sum()),
+            'dropped_edges': int((~kept_mask).sum()),
+            'kept_fraction': float(kept_mask.mean()),
+            'mean_weight': float(all_weights.mean()),
+            'mean_bond_length_kept': float(kept_lengths.mean()) if len(kept_lengths) > 0 else None,
+            'mean_bond_length_dropped': float(dropped_lengths.mean()) if len(dropped_lengths) > 0 else None,
+        }
+        summary_path = f"{self.config.output_dir}/explainability_{key}_{suffix}_summary.json"
+        with open(summary_path, 'w') as f:
+            json.dump(summary, f, indent=4)
+        print(f"Explainability summary saved: {summary_path}")
 
     def epoch_summary(self, epoch, 
                       train_loss, val_loss,
