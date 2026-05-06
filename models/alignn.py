@@ -690,7 +690,7 @@ class CoALIGNN(nn.Module):
                     temp = self.temp_model(g=g, edge_attr=y) if self.learn_temp else self.temp
                     w_bonds = self.get_edge_logits(g, in_bond_logits, out_bond_logits, temp, is_hard)
                     if(self.check_threshold==True):
-                        w_bonds[w_bonds<self.edge_threshold] = 0
+                        w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
                     
 
                     survived_ratios['g'].append((w_bonds.detach().sum() / g.num_edges()).item())
@@ -762,7 +762,7 @@ class CoALIGNN(nn.Module):
                     w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
 
                 if self.check_threshold:
-                    w_bonds[w_bonds < self.edge_threshold] = 0
+                    w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
                 survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
                 w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
