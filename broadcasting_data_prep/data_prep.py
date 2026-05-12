@@ -12,8 +12,8 @@ def create_crystal_graphs(files, df):
     data_list = []
     df_files = df['filename'].tolist()
     for i in tqdm(range(len(df_files))):
-        if df_files[i] in files:
-            file_path = os.path.join(folder_path, df_files[i])
+        if df_files[i]+'.cif' in files:
+            file_path = os.path.join(folder_path, df_files[i]+'.cif')
             with open(file_path, 'r') as f:
                 cif = f.read()
                 struct = Structure.from_str(cif, 'cif')
@@ -31,29 +31,26 @@ def create_crystal_graphs(files, df):
                 d['props'] = ['']*len(d['elements'])
                 data['atoms'] = d
                 data['nf'] = [site.species.elements[0].number for site in struct.sites]
-                data['Eg'] = float(df[df['filename'] == df_files[i]]['label'].values)
+                data['Ef'] = float(df[df['filename'] == df_files[i]]['label'].values)
                 natoms = len(d['elements'])
                 data['extra_atom_features.atomic_radius'] = [Element(z).atomic_radius for z in d['elements']]
-                data['extra_atom_features.atomic_orbitals'] = [list(Element(z).atomic_orbitals.values())[-1] for z in d['elements']]
+                # data['extra_atom_features.atomic_orbitals'] = [list(Element(z).atomic_orbitals.values())[-1] for z in d['elements']]
+                
                 data['global_features.lattice'] = d['lattice_mat']
                 data_list.append(data)
     return data_list
 
-folder = '../'
-folder_path = folder + 'zach_bvm_cifs_071824'
+folder = '../datasets/jarvis/'
+folder_path = folder + 'jarvis_all_cifs'
 files = os.listdir(folder_path)
 
-'''
-df1 = pd.read_csv(folder + 'train_dp_1000_ssl.csv')
-df2 = pd.read_csv(folder + 'test_dp_ssl.csv')
-df_perov = pd.concat([df1, df2], axis=0, ignore_index=True)
-'''
 
-df_perov = pd.read_csv(folder + 'pbe_eg.csv')
+
+df_perov = pd.read_csv(folder + 'jarvis_lg_ef.csv')
 data_list = create_crystal_graphs(files, df_perov)
 print(len(data_list))
 
-with open('./pbe_eg_bvm_struct.pickle', 'wb') as handle:
+with open('./jarvis_lg_cell_ef.pickle', 'wb') as handle:
     pickle.dump(data_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
 print('DONE')
 

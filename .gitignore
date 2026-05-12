@@ -6,5 +6,6 @@
 *.bin
 *.ckpt
 *.pkl
-./outputs
-./downloaded_results
+outputs/
+downloaded_results/
+datasets/jarvis/jarvis_all_cifs/
