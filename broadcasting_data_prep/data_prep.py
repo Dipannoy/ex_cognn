@@ -18,8 +18,10 @@ def create_crystal_graphs(files, df):
                 cif = f.read()
                 struct = Structure.from_str(cif, 'cif')
                 data = {}
-                data['jid'] = df_files[i][:-4]
-                data['system'] = df_files[i][:-4]
+                # data['jid'] = df_files[i][:-4]
+                # data['system'] = df_files[i][:-4]
+                data['jid'] = df_files[i]
+                data['system'] = df_files[i]
                 d = OrderedDict()
                 s = struct.as_dict()
                 d['lattice_mat'] = s['lattice']['matrix']

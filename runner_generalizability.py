@@ -33,28 +33,61 @@ class GeneralizabilityRunner(Runner):
 
     # ── Static / class helpers ─────────────────────────────────────────────────
 
+    # @staticmethod
+    # def collect_test_broadcast_graphs(
+    #     phase1_output_dir: str,
+    #     n_folds: int,
+    #     consolidated_dir: str,
+    # ) -> int:
+    #     """Copy {jid}_bcast.bin from every test_{fold}_graphs/ into one dir.
+
+    #     In a clean 5-fold CV each material appears in exactly one test fold,
+    #     so the union of test_0_graphs … test_4_graphs covers all structures
+    #     exactly once with unbiased (held-out) broadcast graphs.
+
+    #     Args:
+    #         phase1_output_dir : base output directory of the Phase-1 run,
+    #                              e.g. ``outputs/gen_phase1_Ef_lcsn_th0_3_sw0_001_0512``.
+    #         n_folds           : number of CV folds used in Phase 1.
+    #         consolidated_dir  : destination directory (created if absent).
+    #                              **Must end with '/'** because graphs.py uses
+    #                              it as a path prefix: ``trim_graph_dir + jid + '_bcast.bin'``.
+
+    #     Returns:
+    #         Number of files copied.
+    #     """
+    #     if not consolidated_dir.endswith("/"):
+    #         consolidated_dir = consolidated_dir + "/"
+    #     os.makedirs(consolidated_dir, exist_ok=True)
+
+    #     total = 0
+    #     for fold in range(n_folds):
+    #         src = os.path.join(phase1_output_dir, f"test_{fold}_graphs")
+    #         if not os.path.isdir(src):
+    #             print(f"[collect] WARNING: {src} not found — fold {fold} skipped")
+    #             continue
+    #         files = glob.glob(os.path.join(src, "*_bcast.bin"))
+    #         for fpath in files:
+    #             dst = os.path.join(consolidated_dir, os.path.basename(fpath))
+    #             if not os.path.exists(dst):
+    #                 shutil.copy2(fpath, dst)
+    #                 total += 1
+    #     print(f"[collect] {total} broadcast graphs → {consolidated_dir}")
+    #     return total
+
     @staticmethod
     def collect_test_broadcast_graphs(
         phase1_output_dir: str,
         n_folds: int,
         consolidated_dir: str,
+        config_suffix: str = "p1",
     ) -> int:
-        """Copy {jid}_bcast.bin from every test_{fold}_graphs/ into one dir.
+        """Copy {jid}_bcast.bin from every test_{config_suffix}_{fold}_graphs/ into one dir.
 
-        In a clean 5-fold CV each material appears in exactly one test fold,
-        so the union of test_0_graphs … test_4_graphs covers all structures
-        exactly once with unbiased (held-out) broadcast graphs.
-
-        Args:
-            phase1_output_dir : base output directory of the Phase-1 run,
-                                 e.g. ``outputs/gen_phase1_Ef_lcsn_th0_3_sw0_001_0512``.
-            n_folds           : number of CV folds used in Phase 1.
-            consolidated_dir  : destination directory (created if absent).
-                                 **Must end with '/'** because graphs.py uses
-                                 it as a path prefix: ``trim_graph_dir + jid + '_bcast.bin'``.
-
-        Returns:
-            Number of files copied.
+        runner.predict() builds the sub-directory name as:
+            key + '_' + (config.suffix + '_' + str(fold)) + '_graphs'
+        For Phase 1 with config.suffix='p1' and fold=0 this gives
+        ``test_p1_0_graphs``, so config_suffix must match config.suffix.
         """
         if not consolidated_dir.endswith("/"):
             consolidated_dir = consolidated_dir + "/"
@@ -62,7 +95,7 @@ class GeneralizabilityRunner(Runner):
 
         total = 0
         for fold in range(n_folds):
-            src = os.path.join(phase1_output_dir, f"test_{fold}_graphs")
+            src = os.path.join(phase1_output_dir, f"test_{config_suffix}_{fold}_graphs")
             if not os.path.isdir(src):
                 print(f"[collect] WARNING: {src} not found — fold {fold} skipped")
                 continue
@@ -75,24 +108,41 @@ class GeneralizabilityRunner(Runner):
         print(f"[collect] {total} broadcast graphs → {consolidated_dir}")
         return total
 
+    # @staticmethod
+    # def ensure_graph_dirs(
+    #     output_dir: str,
+    #     n_folds: int,
+    #     config_suffix: str = "p1",
+    #     splits: tuple = ("train", "val", "test"),
+    # ) -> None:
+    #     """Pre-create per-fold graph directories so dgl.save_graphs won't fail.
+
+    #     runner.predict() writes to paths like::
+
+    #         ./outputs/{output_dir}/test_0_graphs/{jid}_bcast.bin
+
+    #     but does not create the ``test_0_graphs/`` sub-directory itself,
+    #     which causes a FileNotFoundError.  Call this before runner.test().
+    #     """
+    #     for fold in range(n_folds):
+    #         for split in splits:
+    #             path = os.path.join(".", output_dir, f"{split}_{fold}_graphs")
+    #             os.makedirs(path, exist_ok=True)
+
     @staticmethod
     def ensure_graph_dirs(
         output_dir: str,
         n_folds: int,
+        config_suffix: str = "p1",
         splits: tuple = ("train", "val", "test"),
     ) -> None:
         """Pre-create per-fold graph directories so dgl.save_graphs won't fail.
 
-        runner.predict() writes to paths like::
-
-            ./outputs/{output_dir}/test_0_graphs/{jid}_bcast.bin
-
-        but does not create the ``test_0_graphs/`` sub-directory itself,
-        which causes a FileNotFoundError.  Call this before runner.test().
+        Names match runner.predict(): {split}_{config_suffix}_{fold}_graphs/
         """
         for fold in range(n_folds):
             for split in splits:
-                path = os.path.join(".", output_dir, f"{split}_{fold}_graphs")
+                path = os.path.join(".", output_dir, f"{split}_{config_suffix}_{fold}_graphs")
                 os.makedirs(path, exist_ok=True)
 
     # ── Instance helpers ───────────────────────────────────────────────────────

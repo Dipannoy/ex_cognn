@@ -213,7 +213,7 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
     create_5_fold_CV(args.src_root_dir, args.src_target_file, cfg_tmp.output_dir)
 
     # Pre-create graph output sub-directories
-    GeneralizabilityRunner.ensure_graph_dirs(cfg_tmp.output_dir, args.repeat)
+    GeneralizabilityRunner.ensure_graph_dirs(cfg_tmp.output_dir, args.repeat, config_suffix="p1")
 
     tr_arr, val_arr, test_arr = [], [], []
 
@@ -282,6 +282,7 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
         phase1_output_dir = os.path.join("outputs", phase1_output_dir),
         n_folds           = args.repeat,
         consolidated_dir  = bcast_consolidated_dir,
+        config_suffix     = "p1",
     )
 
     return np.mean(test_arr), np.std(test_arr)
