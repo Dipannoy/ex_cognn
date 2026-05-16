@@ -561,6 +561,7 @@ class CoALIGNN(nn.Module):
                     edge_dim=input_node_dim,
                     hidden_dim=input_node_dim,
                     num_layers=max(self.num_act_graph_layers, 1),
+                    init_r_cut=getattr(config, 'init_r_cut', 3.5),
                 )
             elif(self.action_net == 'MultiplicativeGateScoringNet'):
                 self.edge_scoring_net = MultiplicativeGateScoringNet(
@@ -1051,9 +1052,9 @@ class LearnableCutoffScoringNet(nn.Module):
     Args: same signature as EdgeScoringNet for drop-in compatibility.
     """
 
-    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int):
+    def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int, num_layers: int, init_r_cut: float = 3.5):
         super().__init__()
-        self.r_cut = nn.Parameter(torch.tensor(3.5))   # initial cutoff ~3.5 Å
+        self.r_cut = nn.Parameter(torch.tensor(float(init_r_cut)))  # learnable cutoff (Å)
         self.tau = nn.Parameter(torch.tensor(0.5))      # initial softness
 
     def forward(self, g: dgl.DGLGraph, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

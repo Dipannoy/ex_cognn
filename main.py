@@ -88,7 +88,7 @@ def create_5_fold_CV(root_dir, target_file, output_dir):
         test_X.to_csv(output_dir+"/test_ids_"+str(fold)+".csv", index=False)
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
         target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
-        parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', **kwargs):
+        parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', init_r_cut=3.5, **kwargs):
     """Loader preparation"""
     if sub_dir is None:
         config_file = os.path.join(root_dir, config_name)
@@ -106,6 +106,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.model.logit_1 = float(logit_1)
     config.model.logit_2 = float(logit_2)
     config.model.action_args.action_net = action_net
+    config.model.init_r_cut = float(init_r_cut)
     config.target = target
     config.batch_size = int(batch_size)
     config.epochs = int(epochs)
@@ -203,6 +204,9 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         action_net,
         float(edge_threshold),
         float(sparsity_weight),
+        float(init_r_cut),
+        float(cutoff),
+        int(max_neighbors),
         float(np.mean(tr_arr)),  float(np.std(tr_arr)),
         float(np.mean(val_arr)), float(np.std(val_arr)),
         float(np.mean(test_arr)),float(np.std(test_arr)),
@@ -210,6 +214,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     ]
     global_header = [
         'dataset', 'action_net', 'threshold', 'sparsity_weight',
+        'init_r_cut', 'graph_cutoff', 'max_neighbors',
         'train_mean', 'train_std',
         'val_mean',   'val_std',
         'test_mean',  'test_std',
@@ -395,6 +400,10 @@ if __name__ == "__main__":
         "--global_results_csv", default='outputs/global_results.csv',
         help="Path to the shared CSV file where all experiments append their mean/std test error.",
     )
+    parser.add_argument(
+        "--init_r_cut", default=3.5, type=float,
+        help="Initial r_cut value (\u00c5) for LearnableCutoffScoringNet. Learnable from this starting point.",
+    )
       
     
     args = parser.parse_args(sys.argv[1:])
@@ -435,4 +444,5 @@ if __name__ == "__main__":
         parent_dir=args.parent_dir,
         sparsity_weight = args.sparsity_weight,
         global_results_csv = args.global_results_csv,
+        init_r_cut = args.init_r_cut,
     )
