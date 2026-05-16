@@ -88,7 +88,7 @@ def create_5_fold_CV(root_dir, target_file, output_dir):
         test_X.to_csv(output_dir+"/test_ids_"+str(fold)+".csv", index=False)
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
         target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
-        sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', **kwargs):
+        parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', **kwargs):
     """Loader preparation"""
     if sub_dir is None:
         config_file = os.path.join(root_dir, config_name)
@@ -111,7 +111,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.epochs = int(epochs)
     config.optim.scheduler.epochs = int(epochs)
     config.exp_name = exp_name
-    config.output_dir = os.path.join('outputs', output_dir)
+    config.output_dir = os.path.join(parent_dir, output_dir)
     os.makedirs(config.output_dir, exist_ok=True)
     config.sparsity_weight = float(sparsity_weight)
     config.cutoff = int(cutoff)  
@@ -339,6 +339,9 @@ if __name__ == "__main__":
         "--output_dir2", default="./", help="Folder to save outputs",
     )
     parser.add_argument(
+        "--parent_dir", default="./", help="Folder to save different outputs",
+    )
+    parser.add_argument(
         "--ang_layer", default=None,  help="action_net_glayer",
     )
     parser.add_argument(
@@ -429,6 +432,7 @@ if __name__ == "__main__":
         logit_1 = args.logit_1,
         logit_2 = args.logit_2,
         trim_graph_dir = args.trim_graph_dir,
+        parent_dir=args.parent_dir,
         sparsity_weight = args.sparsity_weight,
         global_results_csv = args.global_results_csv,
     )
