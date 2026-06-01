@@ -109,16 +109,36 @@ def create_5_fold_CV(root_dir: str, target_file: str, output_dir: str):
         test_df.to_csv( os.path.join(output_dir,  f"test_ids_{fold}.csv"), index=False)
 
 
-def copy_split_files(src_dir: str, dst_dir: str, n_folds: int):
-    """Copy train/val/test_ids_{fold}.csv from src_dir to dst_dir."""
+def copy_split_files(src_dir: str, dst_dir: str, n_folds: int,
+                     valid_jids: set = None):
+    """Copy train/val/test_ids_{fold}.csv from src_dir to dst_dir.
+
+    If *valid_jids* is provided the CSV rows are filtered so that only JIDs
+    present in the target dataset survive.  This is needed for cross-property
+    generalizability (Eg->Ef or Ef->Eg) when the two datasets do not share
+    exactly the same set of materials.
+    """
     os.makedirs(dst_dir, exist_ok=True)
     for fold in range(n_folds):
         for split in ("train", "val", "test"):
             fname = f"{split}_ids_{fold}.csv"
             src   = os.path.join(src_dir, fname)
             dst   = os.path.join(dst_dir, fname)
-            if os.path.exists(src) and not os.path.exists(dst):
-                shutil.copy2(src, dst)
+            if not os.path.exists(src):
+                continue
+            if valid_jids is None:
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+            else:
+                # Always rewrite so stale files from a previous run are updated.
+                df = pd.read_csv(src)
+                before = len(df)
+                df = df[df["jid"].isin(valid_jids)].reset_index(drop=True)
+                after  = len(df)
+                if before != after:
+                    print(f"  [split filter] {fname}: {before} -> {after} "
+                          f"(dropped {before - after} JIDs absent from target dataset)")
+                df.to_csv(dst, index=False)
 
 
 def build_config(
@@ -316,11 +336,20 @@ def run_phase2(
     print(f"  {n_bcast:,} broadcast graphs available")
 
     # --- Initialise Phase-2 output dir and copy Phase-1 split files ---
+    # Filter splits to JIDs that exist in the target dataset so cross-property
+    # experiments (Eg->Ef or Ef->Eg) don't crash when the two datasets have
+    # slightly different material sets.
     os.makedirs(os.path.join("outputs", phase2_output_dir), exist_ok=True)
+    import pickle as _pk
+    with open(os.path.join(args.tgt_root_dir, args.tgt_dataset), "rb") as _f:
+        _tgt_data = _pk.load(_f)
+    valid_jids = {d["jid"] for d in _tgt_data}
+    print(f"  Target dataset contains {len(valid_jids):,} unique JIDs")
     copy_split_files(
-        src_dir = os.path.join("outputs", phase1_output_dir),
-        dst_dir = os.path.join("outputs", phase2_output_dir),
-        n_folds = args.repeat,
+        src_dir    = os.path.join("outputs", phase1_output_dir),
+        dst_dir    = os.path.join("outputs", phase2_output_dir),
+        n_folds    = args.repeat,
+        valid_jids = valid_jids,
     )
 
     tr_arr, val_arr, test_arr = [], [], []

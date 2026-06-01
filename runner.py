@@ -718,11 +718,31 @@ class Runner:
         kept_lengths = all_lengths[kept_mask]
         dropped_lengths = all_lengths[~kept_mask]
 
+        # --- font / style settings for manuscript-quality output ---
+        import matplotlib as mpl
+        mpl.rcParams.update({
+            'font.family':      'serif',
+            'font.size':        14,
+            'axes.labelsize':   14,
+            'axes.labelweight': 'bold',
+            'axes.titlesize':   13,
+            'axes.titleweight': 'bold',
+            'xtick.labelsize':  12,
+            'ytick.labelsize':  12,
+            'legend.fontsize':  12,
+            'axes.linewidth':   1.8,
+            'xtick.major.width': 1.5,
+            'ytick.major.width': 1.5,
+            'xtick.major.size':  5,
+            'ytick.major.size':  5,
+        })
+
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
         # Scatter: edge weight vs bond length
         axes[0].scatter(all_lengths, all_weights, alpha=0.2, s=2, c='steelblue')
-        axes[0].axhline(y=threshold, color='r', linestyle='--', label=f'threshold={threshold}')
+        axes[0].axhline(y=threshold, color='r', linestyle='--', linewidth=1.5,
+                        label=f'threshold={threshold}')
         axes[0].set_xlabel('Bond Length (\u00c5)')
         axes[0].set_ylabel('Edge Weight')
         axes[0].set_title(f'{key} [{suffix}] \u2014 Edge Weight vs Bond Length')
@@ -740,8 +760,9 @@ class Runner:
 
         plt.tight_layout()
         plot_path = f"{self.config.output_dir}/explainability_{key}_{suffix}.png"
-        plt.savefig(plot_path, bbox_inches='tight', dpi=150)
+        plt.savefig(plot_path, bbox_inches='tight', dpi=200)
         plt.close()
+        mpl.rcParams.update(mpl.rcParamsDefault)  # restore defaults
         print(f"Explainability plot saved: {plot_path}")
 
         summary = {
