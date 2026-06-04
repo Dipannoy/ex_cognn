@@ -784,8 +784,19 @@ class CoALIGNN(nn.Module):
                     w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
 
                 if self.check_threshold:
-                    w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
-                survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
+                    # w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
+                    # 1. Find which edges survive the threshold
+                    keep_mask = (w_bonds >= self.edge_threshold).squeeze()
+                    # 2. Record the ratio BEFORE we slice
+                    survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
+                    # 3. Get the indices of the surviving edges
+                    keep_indices = torch.nonzero(keep_mask, as_tuple=True)[0]
+                    # 4. PHYSICALLY SLICE THE GRAPH (Highly optimized DGL C++ function)
+                    # relabel_nodes=False ensures node count/features match 'x' perfectly
+                    g = dgl.edge_subgraph(g, keep_indices, relabel_nodes=False)
+                    y = y[keep_indices]
+                    w_bonds = w_bonds[keep_indices]
+                # survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
                 w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
 
