@@ -545,7 +545,7 @@ class Runner:
         report_data = {k: {} for k in report_keys}
         suffix=l
         for loader, k in zip(loaders, report_keys):            
-            pred_dict, survived_edges, metrics = self.predict(loader, k, root_dir, suffix=suffix)
+            pred_dict, survived_edges, metrics, inference_time = self.predict(loader, k, root_dir, suffix=suffix)
             mae_metric, mse_metric = metrics
 
             # survived_edges = self.cal_dict(survived_edges, mul=100)
@@ -555,6 +555,7 @@ class Runner:
             report_data[k]['mae_metric'] = mae_metric
             report_data[k]['mse_metric'] = mse_metric
             report_data[k]['survived_edges'] = survived_edges
+            report_data[k]['inference_time'] = inference_time
 
         return report_data
 
@@ -579,6 +580,7 @@ class Runner:
         tot_ng = 0
         pred_dict = {}
         prob_dict = {}
+        total_inference_time = 0
 
         print("Start prediction")
 
@@ -601,7 +603,13 @@ class Runner:
                 print(ug.edges())
             '''
             graph_output_dir = key+'_'+suffix+'_graphs'
+            torch.cuda.synchronize(self.device)
+            t0 = time.time()
             pred, survived_edges,edge_status,in_logit,out_logit  = self.model((g, lg), keep_bond_forcing=False,is_hard=False)
+            torch.cuda.synchronize(self.device)
+            t1 = time.time()
+            total_inference_time += t1 - t0
+            
             if in_logit is not None and out_logit is not None:
                 self.plot_logit_distributions(in_logit, out_logit,key,n)
 
@@ -696,7 +704,7 @@ class Runner:
 
         self.plot_explainability(key, suffix)
         print("Finish prediction")
-        return pred_dict, survived_edges, (mae_metric, mse_metric)
+        return pred_dict, survived_edges, (mae_metric, mse_metric), total_inference_time
 
     def plot_explainability(self, key, suffix):
         """Generate edge-weight vs bond-length explainability plots for one split/fold."""

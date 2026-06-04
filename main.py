@@ -19,6 +19,7 @@ from sklearn.model_selection import KFold
 
 from runner import Runner
 import numpy as np
+import torch
 
 # def get_loaders(
 #     config,
@@ -128,6 +129,8 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     tr_arr = []
     val_arr = []
     test_arr = []
+    infer_time_arr = [] 
+    train_time_arr = []
     create_5_fold_CV(root_dir,target_file,config.output_dir)
 
     for l in range(0,repeat):
@@ -160,11 +163,15 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         '''
         train_loader, val_loader, _, _ = loaders
         runner = Runner(config=config, **kwargs)
-        
+        torch.cuda.synchronize(runner.device)
         tic = time.time()
         print("Start training")
         runner.train(train_loader, val_loader,l)
-        print(f"Finish training: {(time.time() - tic):.5f} s")
+        torch.cuda.synchronize(runner.device)
+
+        train_time = time.time() - tic
+        train_time_arr.append(train_time)
+        print(f"Finish training: {train_time:.5f} s")
 
         tic = time.time()
         print("Test predictions")
@@ -173,9 +180,11 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         train_tot = train_tot+report_data['train']['mae_metric']
         val_tot = val_tot+report_data['val']['mae_metric']
         test_tot = test_tot+report_data['test']['mae_metric']
+        inference_time = report_data['train']['inference_time'] + report_data['val']['inference_time'] + report_data['test']['inference_time']  
         tr_arr.append(report_data['train']['mae_metric'].item())
         val_arr.append(report_data['val']['mae_metric'].item())
         test_arr.append(report_data['test']['mae_metric'].item())
+        infer_time_arr.append(inference_time)
 
         for k in test_list:
             print(f"{k.upper()} metrics, mae: {report_data[k]['mae_metric']}, mse: {report_data[k]['mse_metric']}")
@@ -189,11 +198,17 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     print('train_std_mae: ', np.std(tr_arr))
     print('val_std_mae: ', np.std(val_arr))
     print('test_std_mae: ',np.std(test_arr))
+    # print('inference_time_avg: ', np.mean(infer_time_arr))
+    # print('inference_time_std: ', np.std(infer_time_arr))
+    # print('train_time_avg: ', np.mean(train_time_arr))
+    # print('train_time_std: ', np.std(train_time_arr))
 
     tr_list = []
     tr_list.append(['train',np.mean(tr_arr),np.std(tr_arr)])
     tr_list.append(['validation',np.mean(val_arr),np.std(val_arr)])
     tr_list.append(['test',np.mean(test_arr),np.std(test_arr)])
+    tr_list.append(['inference_time',np.mean(infer_time_arr),np.std(infer_time_arr)])
+    tr_list.append(['train_time',np.mean(train_time_arr),np.std(train_time_arr)])
     df = pd.DataFrame(tr_list, columns=['sample', 'mean', 'std']) # Add column names if needed
     df.to_csv(config.output_dir+'/error.csv', index=False)
 
@@ -210,6 +225,8 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         float(np.mean(tr_arr)),  float(np.std(tr_arr)),
         float(np.mean(val_arr)), float(np.std(val_arr)),
         float(np.mean(test_arr)),float(np.std(test_arr)),
+        float(np.mean(infer_time_arr)), float(np.std(infer_time_arr)),
+        float(np.mean(train_time_arr)), float(np.std(train_time_arr)),
         output_dir,
     ]
     global_header = [
@@ -218,6 +235,8 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         'train_mean', 'train_std',
         'val_mean',   'val_std',
         'test_mean',  'test_std',
+        'inference_time_mean', 'inference_time_std',
+        'train_time_mean', 'train_time_std',
         'output_dir',
     ]
     os.makedirs(os.path.dirname(global_results_csv) or '.', exist_ok=True)
