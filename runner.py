@@ -629,6 +629,14 @@ class Runner:
                 rem_tensor= torch.tensor(rem_index,device=self.device)
                 rem_tensor = rem_tensor.to(torch.int64)
                 ug_bcast.remove_edges(rem_tensor)
+                # --- NEW DEGREE TRACKING ---
+                # Get the number of edges connected to each node before and after pruning
+                orig_degrees = ug.in_degrees().cpu().tolist()
+                kept_degrees = ug_bcast.in_degrees().cpu().tolist()
+                
+                # Store them in the JSON dictionary
+                prob_dict[g.gdata["jid"][i]]['orig_degrees'] = orig_degrees
+                prob_dict[g.gdata["jid"][i]]['kept_degrees'] = kept_degrees
                 #graph_output_dir = self.config.output_dir+'_'+key+'_'+suffix+'_graphs'
                 #os.makedirs(graph_output_dir, exist_ok=True)
 

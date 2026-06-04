@@ -41,16 +41,16 @@ EXPERIMENTS = [
         "threshold":  0.4,
         "dir":        os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_4_sw0_001_0506"),
         "json_key":   "pbe_eg_bvm_struct",
-        "png_name":   "explainability_test_pbe_eg_bvm_struct_0.png",
+        "png_name":   "explainability_test_jarvis_lg_cell_eg_0.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"JARVIS $E_{\rm f}$",
-        "theta":      r"$\theta = 0.4$",
-        "threshold":  0.4,
-        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_4_sw0_001_0510"),
-        "json_key":   "jarvis_lg_cell_gap",
-        "png_name":   "explainability_test_jarvis_lg_cell_gap_0.png",
+        "theta":      r"$\theta = 0.3$",
+        "threshold":  0.3,
+        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_3_sw0_001_0510"),
+        "json_key":   "jarvis_lg_gap",
+        "png_name":   "explainability_test_jarvis_lg_cell_ef_0.png",
         "group":      "JARVIS",
     },
     {
@@ -59,16 +59,16 @@ EXPERIMENTS = [
         "threshold":  0.2,
         "dir":        os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001_0506"),
         "json_key":   "lg_unit_cell_eg",
-        "png_name":   "explainability_test_lg_unit_cell_eg_0.png",
+        "png_name":   "explainability_test_mp_lg_cell_eg_0.png",
         "group":      "MP",
     },
     {
         "row_label":  r"MP $E_{\rm f}$",
-        "theta":      r"$\theta = 0.5$",
-        "threshold":  0.5,
-        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001_0510"),
-        "json_key":   "mp_lg_cell_gap",
-        "png_name":   "explainability_test_mp_lg_cell_gap_0.png",
+        "theta":      r"$\theta = 0.3$",
+        "threshold":  0.3,
+        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_3_sw0_001_0510"),
+        "json_key":   "lg_unit_cell_ef",
+        "png_name":   "explainability_test_mp_lg_cell_ef_0.png",
         "group":      "MP",
     },
 ]
@@ -213,6 +213,7 @@ PANEL_LETTERS = list("abcdefgh")
 
 def load_and_split(path: str):
     """Load PNG, remove internal titles + white borders, split into left/right halves."""
+    print(f"Loading and processing {os.path.basename(path)} ...")
     img = np.array(Image.open(path).convert("RGB"))
     H, W = img.shape[:2]
 
