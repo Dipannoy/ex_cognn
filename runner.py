@@ -605,7 +605,7 @@ class Runner:
             graph_output_dir = key+'_'+suffix+'_graphs'
             torch.cuda.synchronize(self.device)
             t0 = time.time()
-            pred, survived_edges,edge_status,in_logit,out_logit  = self.model((g, lg), keep_bond_forcing=False,is_hard=False)
+            pred, survived_edges,edge_status,in_logit,out_logit  = self.model((g, lg), keep_bond_forcing=False,is_hard=False,is_eval=True)
             torch.cuda.synchronize(self.device)
             t1 = time.time()
             total_inference_time += t1 - t0

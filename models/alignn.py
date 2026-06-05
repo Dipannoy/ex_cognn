@@ -645,7 +645,7 @@ class CoALIGNN(nn.Module):
 
     def forward(
         self, g: Union[Tuple[dgl.DGLGraph, dgl.DGLGraph], dgl.DGLGraph],
-        keep_bond_forcing: bool=False, context=torch.enable_grad(), is_hard=False,
+        keep_bond_forcing: bool=False, context=torch.enable_grad(), is_hard=False,is_eval=False,
     ):
         """ALIGNN : start with `atom_features`.
 
@@ -786,17 +786,21 @@ class CoALIGNN(nn.Module):
                 if self.check_threshold:
                     # w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
                     # 1. Find which edges survive the threshold
-                    keep_mask = (w_bonds >= self.edge_threshold).squeeze()
-                    # 2. Record the ratio BEFORE we slice
-                    survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
-                    # 3. Get the indices of the surviving edges
-                    keep_indices = torch.nonzero(keep_mask, as_tuple=True)[0]
-                    # 4. PHYSICALLY SLICE THE GRAPH (Highly optimized DGL C++ function)
-                    # relabel_nodes=False ensures node count/features match 'x' perfectly
-                    g = dgl.edge_subgraph(g, keep_indices, relabel_nodes=False)
-                    y = y[keep_indices]
-                    w_bonds = w_bonds[keep_indices]
-                # survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
+
+                    if is_eval:
+                        keep_mask = (w_bonds >= self.edge_threshold).squeeze()
+                        # 2. Record the ratio BEFORE we slice
+                        survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
+                        # 3. Get the indices of the surviving edges
+                        keep_indices = torch.nonzero(keep_mask, as_tuple=True)[0]
+                        # 4. PHYSICALLY SLICE THE GRAPH (Highly optimized DGL C++ function)
+                        # relabel_nodes=False ensures node count/features match 'x' perfectly
+                        g = dgl.edge_subgraph(g, keep_indices, relabel_nodes=False)
+                        y = y[keep_indices]
+                        w_bonds = w_bonds[keep_indices]
+                    else:
+                        w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
+                        survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
                 w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
 
