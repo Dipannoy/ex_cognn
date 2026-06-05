@@ -761,46 +761,67 @@ class CoALIGNN(nn.Module):
         # gated GCN updates: update node, edge features
         in_gcn_logits = None
         out_gcn_logits = None
-        for gcn_layer in self.gcn_layers:
-            if self.num_act_graph_layers > 0:
-                x_act = x
-                temp = self.temp_model(g=g, edge_attr=y) if self.learn_temp else self.temp
 
-                if self.action_net in ('EdgeScoringNet', 'EdgeOnlyScoringNet',
-                                       'LearnableCutoffScoringNet', 'MultiplicativeGateScoringNet'):
-                    edge_logits = self.edge_scoring_net(g, x_act, y)  # [E, 2]
-                    w_bonds = F.gumbel_softmax(logits=edge_logits, tau=temp, hard=is_hard)[:, 0]
-                    in_gcn_logits = edge_logits   # store for downstream (shape [E,2], not [N,2])
-                    out_gcn_logits = None
-                elif self.action_net == 'ActionNet_mean_gnn_node':
-                    y_act = self.act_edge_embedding(y)
-                    in_gcn_logits = self.in_act_graph_net(g, x_act)   # [N, 2]
-                    out_gcn_logits = self.out_act_graph_net(g, x_act)  # [N, 2]
-                    w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
+        if self.check_threshold and self.num_act_graph_layers > 0:
+            if self.action_net == 'LearnableCutoffScoringNet':
+
+                edge_logits = self.edge_scoring_net(g, x, y)
+                w_bonds_full = F.gumbel_softmax(logits=edge_logits, tau=self.temp, hard=is_hard)[:, 0]
+                if is_eval:
+                    keep_mask = (w_bonds_full >= self.edge_threshold).squeeze()
+                    survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
+                    g = dgl.edge_subgraph(g, keep_mask, relabel_nodes=False)
+                    y = y[keep_mask]
+                    w_bonds_pruned = w_bonds_full[keep_mask]
+                    pruned = True
                 else:
-                    y_act = self.act_edge_embedding(y)
-                    in_gcn_logits, _ = self.in_act_graph_net(g, x_act, y_act)   # [N, 2]
-                    out_gcn_logits, _ = self.out_act_graph_net(g, x_act, y_act)  # [N, 2]
-                    w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
+                    w_bonds_pruned = w_bonds_full * (w_bonds_full >= self.edge_threshold).float()
+                    survived_ratios['gcn'].append((w_bonds_pruned.detach().sum() / g.num_edges()).item())
+                    pruned = True
+            else:
+                pruned = False
+        for gcn_layer in self.gcn_layers:
+            if pruned:
+                w_bonds = w_bonds_pruned  # reuse, skip scoring entirely
+            # if self.num_act_graph_layers > 0:
+            #     x_act = x
+            #     temp = self.temp_model(g=g, edge_attr=y) if self.learn_temp else self.temp
 
-                if self.check_threshold:
-                    # w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
-                    # 1. Find which edges survive the threshold
+            #     if self.action_net in ('EdgeScoringNet', 'EdgeOnlyScoringNet',
+            #                            'LearnableCutoffScoringNet', 'MultiplicativeGateScoringNet'):
+            #         edge_logits = self.edge_scoring_net(g, x_act, y)  # [E, 2]
+            #         w_bonds = F.gumbel_softmax(logits=edge_logits, tau=temp, hard=is_hard)[:, 0]
+            #         in_gcn_logits = edge_logits   # store for downstream (shape [E,2], not [N,2])
+            #         out_gcn_logits = None
+            #     elif self.action_net == 'ActionNet_mean_gnn_node':
+            #         y_act = self.act_edge_embedding(y)
+            #         in_gcn_logits = self.in_act_graph_net(g, x_act)   # [N, 2]
+            #         out_gcn_logits = self.out_act_graph_net(g, x_act)  # [N, 2]
+            #         w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
+            #     else:
+            #         y_act = self.act_edge_embedding(y)
+            #         in_gcn_logits, _ = self.in_act_graph_net(g, x_act, y_act)   # [N, 2]
+            #         out_gcn_logits, _ = self.out_act_graph_net(g, x_act, y_act)  # [N, 2]
+            #         w_bonds = self.get_edge_logits(g, in_gcn_logits, out_gcn_logits, temp, is_hard)
 
-                    if is_eval:
-                        keep_mask = (w_bonds >= self.edge_threshold).squeeze()
-                        # 2. Record the ratio BEFORE we slice
-                        survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
-                        # 3. Get the indices of the surviving edges
-                        keep_indices = torch.nonzero(keep_mask, as_tuple=True)[0]
-                        # 4. PHYSICALLY SLICE THE GRAPH (Highly optimized DGL C++ function)
-                        # relabel_nodes=False ensures node count/features match 'x' perfectly
-                        g = dgl.edge_subgraph(g, keep_indices, relabel_nodes=False)
-                        y = y[keep_indices]
-                        w_bonds = w_bonds[keep_indices]
-                    else:
-                        w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
-                        survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
+            #     if self.check_threshold:
+            #         # w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
+            #         # 1. Find which edges survive the threshold
+
+            #         if is_eval:
+            #             keep_mask = (w_bonds >= self.edge_threshold).squeeze()
+            #             # 2. Record the ratio BEFORE we slice
+            #             survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
+            #             # 3. Get the indices of the surviving edges
+            #             keep_indices = torch.nonzero(keep_mask, as_tuple=True)[0]
+            #             # 4. PHYSICALLY SLICE THE GRAPH (Highly optimized DGL C++ function)
+            #             # relabel_nodes=False ensures node count/features match 'x' perfectly
+            #             g = dgl.edge_subgraph(g, keep_indices, relabel_nodes=False)
+            #             y = y[keep_indices]
+            #             w_bonds = w_bonds[keep_indices]
+            #         else:
+            #             w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
+            #             survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
                 w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
 
