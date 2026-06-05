@@ -778,9 +778,9 @@ class CoALIGNN(nn.Module):
                 w_bonds_pruned = w_bonds_full * (w_bonds_full >= self.edge_threshold).float()
                 survived_ratios['gcn'].append((w_bonds_pruned.detach().sum() / g.num_edges()).item())
                 pruned = True
-            else:
-                w_bonds_all = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
-                pruned = False
+        else:
+            w_bonds_all = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
+            pruned = False
         for gcn_layer in self.gcn_layers:
             if pruned:
                 w_bonds = w_bonds_pruned  # reuse, skip scoring entirely
