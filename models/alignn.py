@@ -767,17 +767,17 @@ class CoALIGNN(nn.Module):
 
                 edge_logits = self.edge_scoring_net(g, x, y)
                 w_bonds_full = F.gumbel_softmax(logits=edge_logits, tau=self.temp, hard=is_hard)[:, 0]
-                if is_eval:
-                    keep_mask = (w_bonds_full >= self.edge_threshold).squeeze()
-                    survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
-                    g = dgl.edge_subgraph(g, keep_mask, relabel_nodes=False)
-                    y = y[keep_mask]
-                    w_bonds_pruned = w_bonds_full[keep_mask]
-                    pruned = True
-                else:
-                    w_bonds_pruned = w_bonds_full * (w_bonds_full >= self.edge_threshold).float()
-                    survived_ratios['gcn'].append((w_bonds_pruned.detach().sum() / g.num_edges()).item())
-                    pruned = True
+                # if is_eval:
+                #     keep_mask = (w_bonds_full >= self.edge_threshold).squeeze()
+                #     survived_ratios['gcn'].append((keep_mask.float().sum() / g.num_edges()).item())
+                #     g = dgl.edge_subgraph(g, keep_mask, relabel_nodes=False)
+                #     y = y[keep_mask]
+                #     w_bonds_pruned = w_bonds_full[keep_mask]
+                #     pruned = True
+                # else:
+                w_bonds_pruned = w_bonds_full * (w_bonds_full >= self.edge_threshold).float()
+                survived_ratios['gcn'].append((w_bonds_pruned.detach().sum() / g.num_edges()).item())
+                pruned = True
             else:
                 pruned = False
         for gcn_layer in self.gcn_layers:
