@@ -62,6 +62,7 @@ import os
 import shutil
 import sys
 import time
+import torch
 
 import numpy as np
 import pandas as pd
@@ -236,6 +237,8 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
     GeneralizabilityRunner.ensure_graph_dirs(cfg_tmp.output_dir, args.repeat, config_suffix="p1")
 
     tr_arr, val_arr, test_arr = [], [], []
+    inference_time_arr = []
+    inference_time = 0
 
     for fold in range(args.repeat):
         print(f"\n--- Phase 1 | fold {fold}/{args.repeat - 1} ---")
@@ -274,11 +277,13 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
         runner.train(train_loader, val_loader, fold)
         print(f"Phase 1 fold {fold} training: {time.time() - tic:.1f} s")
 
-        report_data = runner.test(loaders[:3], ["train", "val", "test"], fold,
+        report_data, = runner.test(loaders[:3], ["train", "val", "test"], fold,
                                   args.src_root_dir)
         tr_arr.append(report_data["train"]["mae_metric"].item())
         val_arr.append(report_data["val"]["mae_metric"].item())
         test_arr.append(report_data["test"]["mae_metric"].item())
+        inference_time = report_data['train']['inference_time'] + report_data['val']['inference_time'] + report_data['test']['inference_time']  
+        inference_time_arr.append(inference_time)
 
         for k in ("train", "val", "test"):
             print(f"  [{k}] MAE = {report_data[k]['mae_metric']:.4f}")
@@ -286,12 +291,15 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
     # --- Summary ---
     print(f"\nPhase 1 ({args.src_target}) results across {args.repeat} folds:")
     print(f"  test MAE = {np.mean(test_arr):.4f} ± {np.std(test_arr):.4f}")
+    print(f"  inference time = {np.mean(inference_time_arr):.4f} ± {np.std(inference_time_arr):.4f} s")
 
     # Persist per-experiment CSV
     rows = [
         ["train", np.mean(tr_arr),   np.std(tr_arr)],
         ["val",   np.mean(val_arr),  np.std(val_arr)],
         ["test",  np.mean(test_arr), np.std(test_arr)],
+        ["inference_time", np.mean(inference_time_arr), np.std(inference_time_arr)],
+
     ]
     df = pd.DataFrame(rows, columns=["sample", "mean", "std"])
     df.to_csv(os.path.join("outputs", phase1_output_dir, "error.csv"), index=False)
@@ -353,6 +361,8 @@ def run_phase2(
     )
 
     tr_arr, val_arr, test_arr = [], [], []
+    training_time_arr = []
+    inference_time_arr = []
 
     for fold in range(args.repeat):
         print(f"\n--- Phase 2 | fold {fold}/{args.repeat - 1} ---")
@@ -387,16 +397,21 @@ def run_phase2(
         train_loader, val_loader = loaders[0], loaders[1]
 
         runner = GeneralizabilityRunner(config=cfg)
+        torch.cuda.synchronize(runner.device)
 
         tic = time.time()
         runner.train(train_loader, val_loader, fold)
-        print(f"Phase 2 fold {fold} training: {time.time() - tic:.1f} s")
+        torch.cuda.synchronize(runner.device)
+
+        training_time_arr.append(time.time() - tic)
+        print(f"Phase 2 fold {fold} training: {training_time_arr[-1]:.1f} s")
 
         report_data = runner.test(loaders[:3], ["train", "val", "test"], fold,
                                   args.tgt_root_dir)
         tr_arr.append(report_data["train"]["mae_metric"].item())
         val_arr.append(report_data["val"]["mae_metric"].item())
         test_arr.append(report_data["test"]["mae_metric"].item())
+        inference_time_arr.append(report_data["train"]["inference_time"] + report_data["val"]["inference_time"] + report_data["test"]["inference_time"])
 
         for k in ("train", "val", "test"):
             print(f"  [{k}] MAE = {report_data[k]['mae_metric']:.4f}")
@@ -404,16 +419,20 @@ def run_phase2(
     # --- Summary ---
     print(f"\nPhase 2 ({args.tgt_target} on {args.src_target}-pruned graphs) results:")
     print(f"  test MAE = {np.mean(test_arr):.4f} ± {np.std(test_arr):.4f}")
-
+    print(f"  inference time = {np.mean(inference_time_arr):.4f} ± {np.std(inference_time_arr):.4f} s")
+    print(f"  training time = {np.mean(training_time_arr):.4f} ± {np.std(training_time_arr):.4f} s")
     rows = [
         ["train", np.mean(tr_arr),   np.std(tr_arr)],
         ["val",   np.mean(val_arr),  np.std(val_arr)],
         ["test",  np.mean(test_arr), np.std(test_arr)],
+        ["inference_time", np.mean(inference_time_arr), np.std(inference_time_arr)],
+        ["training_time", np.mean(training_time_arr), np.std(training_time_arr)],
+
     ]
     df = pd.DataFrame(rows, columns=["sample", "mean", "std"])
     df.to_csv(os.path.join("outputs", phase2_output_dir, "error.csv"), index=False)
 
-    return np.mean(test_arr), np.std(test_arr)
+    return np.mean(test_arr), np.std(test_arr), np.mean(inference_time_arr), np.std(inference_time_arr), np.mean(training_time_arr), np.std(training_time_arr) 
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -538,7 +557,7 @@ def main():
         return
 
     # ── Phase 2 ───────────────────────────────────────────────────────────────
-    p2_mean, p2_std = run_phase2(
+    p2_mean, p2_std, p2_inference_mean, p2_inference_std, p2_training_mean, p2_training_std = run_phase2(
         args,
         phase1_output_dir,
         phase2_output_dir,
@@ -554,6 +573,10 @@ def main():
         "sparsity_weight": args.sparsity_weight,
         "test_mean":      round(p2_mean, 6),
         "test_std":       round(p2_std,  6),
+        "inference_time_mean": round(p2_inference_mean, 6),
+        "inference_time_std":  round(p2_inference_std, 6),
+        "training_time_mean":  round(p2_training_mean, 6),
+        "training_time_std":   round(p2_training_std, 6),
         "output_dir":     phase2_output_dir,
     })
 
@@ -566,6 +589,8 @@ def main():
               f"{p1_mean:.4f} ± {p1_std:.4f} eV")
     print(f"  Phase 2  {args.tgt_target} (on Phase-1 pruned graphs):  "
           f"{p2_mean:.4f} ± {p2_std:.4f} eV")
+    print(f"    Inference time: {p2_inference_mean:.4f} ± {p2_inference_std:.4f} s")
+    print(f"    Training time:  {p2_training_mean:.4f} ± {p2_training_std:.4f} s")
     print()
     print("  Compare Phase-2 MAE to the full-graph baseline from global_results.csv.")
     print(f"  Results appended to: {args.global_results_csv}")
