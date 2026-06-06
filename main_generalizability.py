@@ -479,6 +479,8 @@ def parse_args():
     # Output
     p.add_argument("--output_tag",  default="0512",
                    help="Date/version tag appended to output directory names.")
+    p.add_argument("--output_tag_p1",  default="0512",
+                   help="Date/version tag appended to output directory names.")
     p.add_argument("--global_results_csv", default="outputs/generalizability_results.csv")
 
     # Control flags
@@ -504,7 +506,7 @@ def main():
         phase1_output_dir = args.phase1_output_dir
     else:
         phase1_output_dir = (
-            f"gen_phase1_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}"
+            f"gen_phase1_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}"
         )
 
     phase2_output_dir = (
@@ -514,7 +516,7 @@ def main():
     # Consolidated broadcast graph directory (must end with '/')
     bcast_dir = os.path.join(
         "outputs",
-        f"gen_bcast_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}",
+        f"gen_bcast_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}",
         "",        # trailing slash
     )
 
