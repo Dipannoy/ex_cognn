@@ -277,7 +277,7 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
         runner.train(train_loader, val_loader, fold)
         print(f"Phase 1 fold {fold} training: {time.time() - tic:.1f} s")
 
-        report_data, = runner.test(loaders[:3], ["train", "val", "test"], fold,
+        report_data = runner.test(loaders[:3], ["train", "val", "test"], fold,
                                   args.src_root_dir)
         tr_arr.append(report_data["train"]["mae_metric"].item())
         val_arr.append(report_data["val"]["mae_metric"].item())
