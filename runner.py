@@ -559,6 +559,74 @@ class Runner:
         return report_data
 
     @torch.no_grad()
+    def extract_node_embeddings(self, loader):
+        """Extract per-node embeddings from the final GCN layer for all structures.
+
+        Returns
+        -------
+        dict  {jid -> {"embeddings": np.ndarray [N_atoms, H],
+                        "src": np.ndarray [E],  "dst": np.ndarray [E]}}
+              where src/dst are the edge endpoints of the atom graph (for
+              MAD local/remote partition and oversquashing distance analysis).
+        """
+        self.model.eval()
+
+        # Hook storage
+        captured = {}
+
+        # Register a forward hook on the LAST GCN layer to capture its output.
+        gcn_layers = self.model.gcn_layers
+        if len(gcn_layers) == 0:
+            raise ValueError("Model has no gcn_layers — cannot extract embeddings.")
+
+        def _hook(module, inp, out):
+            # EdgeGatedGraphConv returns (node_feats, edge_feats)
+            node_out = out[0] if isinstance(out, tuple) else out
+            captured['node_feats'] = node_out.detach().cpu()
+
+        handle = gcn_layers[-1].register_forward_hook(_hook)
+
+        result = {}
+        try:
+            for batch in loader:
+                g, lg, y = batch
+                g  = g.to(self.device)
+                lg = lg.to(self.device)
+
+                _ = self.model((g, lg),
+                               keep_bond_forcing=False,
+                               context=torch.no_grad(),
+                               is_hard=False,
+                               is_eval=True)
+
+                node_feats = captured['node_feats']   # [total_nodes_in_batch, H]
+                src_all, dst_all = g.edges()
+                src_all = src_all.cpu().numpy()
+                dst_all = dst_all.cpu().numpy()
+
+                # Split the batched graph back into individual structures
+                batch_num_nodes = g.batch_num_nodes().cpu().numpy()
+                batch_num_edges = g.batch_num_edges().cpu().numpy()
+                jids = [g.gdata['jid']] if not isinstance(g.gdata['jid'], list) \
+                       else g.gdata['jid']
+
+                node_offset = 0
+                edge_offset = 0
+                for i, jid in enumerate(jids):
+                    n = batch_num_nodes[i]
+                    e = batch_num_edges[i]
+                    emb  = node_feats[node_offset:node_offset + n].numpy()
+                    src  = src_all[edge_offset:edge_offset + e] - node_offset
+                    dst  = dst_all[edge_offset:edge_offset + e] - node_offset
+                    result[jid] = {"embeddings": emb, "src": src, "dst": dst}
+                    node_offset += n
+                    edge_offset += e
+        finally:
+            handle.remove()
+
+        return result
+
+    @torch.no_grad()
     def predict(self, loader, key, root_dir=None, suffix=None):
         from tqdm import tqdm
         import pickle
