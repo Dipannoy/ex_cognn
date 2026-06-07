@@ -500,7 +500,6 @@ class Runner:
             
             train_loss, train_survived_edges = self.train_step(epoch, train_loader)
             val_loss, val_survived_edges = self.eval_step(epoch, val_loader, 'val')
-
             train_err.append(train_loss)
             val_err.append(val_loss)
             # train_survived_edges = self.cal_dict(train_survived_edges, mul=100)
@@ -613,45 +612,45 @@ class Runner:
             if in_logit is not None and out_logit is not None:
                 self.plot_logit_distributions(in_logit, out_logit,key,n)
 
-            # curr_position = 0
-            # #sm_edge_status = [0 if x<0.5 else x for x in edge_status]
-            # sm_edge_status = edge_status
-            # for i, ug in enumerate(unbatched_graphs):
-            #         #print('-----------------------------------------------------')
-            #         #print(f"Graph {i+1}:")
+            curr_position = 0
+            #sm_edge_status = [0 if x<0.5 else x for x in edge_status]
+            sm_edge_status = edge_status
+            for i, ug in enumerate(unbatched_graphs):
+                    #print('-----------------------------------------------------')
+                    #print(f"Graph {i+1}:")
 
-            #         # u1,v1 = ug.edges()
-            #     ug_bcast = copy.deepcopy(ug)
-            #     rem_index = []
-            #     k=0
+                    # u1,v1 = ug.edges()
+                ug_bcast = copy.deepcopy(ug)
+                rem_index = []
+                k=0
            
-            #     for j in range(curr_position,curr_position+len(ug_bcast.edges()[0])):
-            #         if sm_edge_status[j] == 0:
-            #             rem_index.append(k)
-            #         k=k+1
-            #     prob_dist = sm_edge_status[curr_position:curr_position+len(ug_bcast.edges()[0])]
-            #     bond_lengths = torch.norm(ug.edata['r'], dim=1).cpu().tolist() if 'r' in ug.edata else []
-            #     prob_dict[g.gdata["jid"][i]] = {'key': key, 'prop_dist': prob_dist.tolist(), 'bond_lengths': bond_lengths}
+                for j in range(curr_position,curr_position+len(ug_bcast.edges()[0])):
+                    if sm_edge_status[j] == 0:
+                        rem_index.append(k)
+                    k=k+1
+                prob_dist = sm_edge_status[curr_position:curr_position+len(ug_bcast.edges()[0])]
+                bond_lengths = torch.norm(ug.edata['r'], dim=1).cpu().tolist() if 'r' in ug.edata else []
+                prob_dict[g.gdata["jid"][i]] = {'key': key, 'prop_dist': prob_dist.tolist(), 'bond_lengths': bond_lengths}
                 
-            #     curr_position= curr_position+len(ug_bcast.edges()[0])
-            #     rem_tensor= torch.tensor(rem_index,device=self.device)
-            #     rem_tensor = rem_tensor.to(torch.int64)
-            #     ug_bcast.remove_edges(rem_tensor)
-            #     # --- NEW DEGREE TRACKING ---
-            #     # Get the number of edges connected to each node before and after pruning
-            #     orig_degrees = ug.in_degrees().cpu().tolist()
-            #     kept_degrees = ug_bcast.in_degrees().cpu().tolist()
+                curr_position= curr_position+len(ug_bcast.edges()[0])
+                rem_tensor= torch.tensor(rem_index,device=self.device)
+                rem_tensor = rem_tensor.to(torch.int64)
+                ug_bcast.remove_edges(rem_tensor)
+                # --- NEW DEGREE TRACKING ---
+                # Get the number of edges connected to each node before and after pruning
+                orig_degrees = ug.in_degrees().cpu().tolist()
+                kept_degrees = ug_bcast.in_degrees().cpu().tolist()
                 
-            #     # Store them in the JSON dictionary
-            #     prob_dict[g.gdata["jid"][i]]['orig_degrees'] = orig_degrees
-            #     prob_dict[g.gdata["jid"][i]]['kept_degrees'] = kept_degrees
-            #     #graph_output_dir = self.config.output_dir+'_'+key+'_'+suffix+'_graphs'
-            #     #os.makedirs(graph_output_dir, exist_ok=True)
+                # Store them in the JSON dictionary
+                prob_dict[g.gdata["jid"][i]]['orig_degrees'] = orig_degrees
+                prob_dict[g.gdata["jid"][i]]['kept_degrees'] = kept_degrees
+                #graph_output_dir = self.config.output_dir+'_'+key+'_'+suffix+'_graphs'
+                #os.makedirs(graph_output_dir, exist_ok=True)
 
-            #     prev_graph_name = './'+self.config.output_dir+'/'+graph_output_dir +'/'+g.gdata["jid"][i]+'_org.bin'
-            #     bcast_graph_name ='./'+self.config.output_dir+'/'+graph_output_dir +'/'+g.gdata["jid"][i]+'_bcast.bin'
-            #     dgl.save_graphs(prev_graph_name, [ug])
-            #     dgl.save_graphs(bcast_graph_name,[ug_bcast])
+                prev_graph_name = './'+self.config.output_dir+'/'+graph_output_dir +'/'+g.gdata["jid"][i]+'_org.bin'
+                bcast_graph_name ='./'+self.config.output_dir+'/'+graph_output_dir +'/'+g.gdata["jid"][i]+'_bcast.bin'
+                dgl.save_graphs(prev_graph_name, [ug])
+                dgl.save_graphs(bcast_graph_name,[ug_bcast])
 
             
             '''
