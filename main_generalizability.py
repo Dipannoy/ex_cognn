@@ -501,22 +501,23 @@ def main():
     th_tag = str(args.edge_threshold).replace(".", "_")
     sw_tag = str(args.sparsity_weight).replace(".", "_")
     nt     = net_tag(args.action_net)
+    dataset_name = args.src_root_dir.split("/")[1]  # e.g. "ef" from "datasets/mp/ef"
 
     if args.phase1_output_dir:
         phase1_output_dir = args.phase1_output_dir
     else:
         phase1_output_dir = (
-            f"gen_phase1_{args.src_root_dir}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}"
+            f"gen_phase1_{dataset_name}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}"
         )
 
     phase2_output_dir = (
-        f"gen_phase2_{args.src_root_dir}_{args.tgt_target}_on_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}"
+        f"gen_phase2_{dataset_name}_{args.tgt_target}_on_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}"
     )
 
     # Consolidated broadcast graph directory (must end with '/')
     bcast_dir = os.path.join(
         "outputs",
-        f"gen_bcast_{args.src_root_dir}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}",
+        f"gen_bcast_{dataset_name}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}",
         "",        # trailing slash
     )
 

@@ -23,6 +23,9 @@ class Runner:
     def __init__(self, config, verbose=True, **kwargs):
         self.config = config
 
+        print('================================Runner Initialization====================================')
+        print(self.config.output_dir)
+        print("========================================================================")
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.device = 'cpu'
         if (config.model.name == "alignn") or (config.model.name == "coalignn"):
