@@ -506,22 +506,22 @@ def main():
         phase1_output_dir = args.phase1_output_dir
     else:
         phase1_output_dir = (
-            f"gen_phase1_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}"
+            f"gen_phase1_{args.src_root_dir}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}"
         )
 
     phase2_output_dir = (
-        f"gen_phase2_{args.tgt_target}_on_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}"
+        f"gen_phase2_{args.src_root_dir}_{args.tgt_target}_on_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag}"
     )
 
     # Consolidated broadcast graph directory (must end with '/')
     bcast_dir = os.path.join(
         "outputs",
-        f"gen_bcast_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}",
+        f"gen_bcast_{args.src_root_dir}_{args.src_target}_{nt}_th{th_tag}_sw{sw_tag}_{args.output_tag_p1}",
         "",        # trailing slash
     )
 
     print("\n" + "=" * 60)
-    print("CoALIGNN Cross-Property Generalizability Experiment")
+    print("CoGNN Cross-Property Generalizability Experiment")
     print("=" * 60)
     print(f"  Source property : {args.src_target}")
     print(f"  Target property : {args.tgt_target}")

@@ -28,18 +28,32 @@ from omegaconf import OmegaConf
 
 
 # ── Default paths ──────────────────────────────────────────────────────────────
-EF_PKL    = "datasets/mp/ef/mp_lg_unit_cell_ef.pickle"
-EG_PKL    = "datasets/mp/mp_lg_unit_cell_gap.pickle"
-EF_CSV    = "datasets/mp/ef/mp_ef_lg_unit_cell_id.csv"
-EG_CSV    = "datasets/mp/mp_gap_lg_unit_cell_id.csv"
-EG_CONFIG = "datasets/mp/config_eg_coalignn.json"
-EF_CONFIG = "datasets/mp/ef/config_ef_coalignn.json"
+# EF_PKL    = "datasets/mp/ef/mp_lg_unit_cell_ef.pickle"
+# EG_PKL    = "datasets/mp/mp_lg_unit_cell_gap.pickle"
+# EF_CSV    = "datasets/mp/ef/mp_ef_lg_unit_cell_id.csv"
+# EG_CSV    = "datasets/mp/mp_gap_lg_unit_cell_id.csv"
+# EG_CONFIG = "datasets/mp/config_eg_coalignn.json"
+# EF_CONFIG = "datasets/mp/ef/config_ef_coalignn.json"
+
+# # Output prefix when filtered pickles are needed
+# EF_PKL_GEN = "datasets/mp/ef/mp_lg_unit_cell_ef_gen.pickle"
+# EG_PKL_GEN = "datasets/mp/mp_lg_unit_cell_gap_gen.pickle"
+# EF_CSV_GEN = "datasets/mp/ef/mp_ef_lg_unit_cell_id_gen.csv"
+# EG_CSV_GEN = "datasets/mp/mp_gap_lg_unit_cell_id_gen.csv"
+
+EF_PKL    = "datasets/jarvis/jarvis_lg_cell_ef.pickle"
+EG_PKL    = "datasets/jarvis/jarvis_lg_cell_gap.pickle"
+EF_CSV    = "datasets/jarvis/jarvis_lg_ef.csv"
+EG_CSV    = "datasets/jarvis/jarvis_lg_gap.csv"
+EG_CONFIG = "datasets/jarvis/config_eg_coalignn.json"
+EF_CONFIG = "datasets/jarvis/config_ef_coalignn.json"
 
 # Output prefix when filtered pickles are needed
-EF_PKL_GEN = "datasets/mp/ef/mp_lg_unit_cell_ef_gen.pickle"
-EG_PKL_GEN = "datasets/mp/mp_lg_unit_cell_gap_gen.pickle"
-EF_CSV_GEN = "datasets/mp/ef/mp_ef_lg_unit_cell_id_gen.csv"
-EG_CSV_GEN = "datasets/mp/mp_gap_lg_unit_cell_id_gen.csv"
+EF_PKL_GEN = "datasets/jarvis/jarvis_lg_unit_cell_ef_gen.pickle"
+EG_PKL_GEN = "datasets/jarvis/jarvis_lg_unit_cell_gap_gen.pickle"
+EF_CSV_GEN = "datasets/jarvis/jarvis_ef_lg_unit_cell_id_gen.csv"
+EG_CSV_GEN = "datasets/jarvis/jarvis_gap_lg_unit_cell_id_gen.csv"
+
 
 
 def load_pickle(path: str) -> list:
