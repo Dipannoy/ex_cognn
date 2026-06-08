@@ -97,22 +97,43 @@ def discover_experiments(results_root: str, dataset: str) -> list[dict]:
     return experiments
 
 
-def build_config_from_dir(exp_path: str) -> object:
-    """Load the OmegaConf config saved in the experiment directory."""
-    cfg_candidates = ["config.yaml", "config.json", "config_eg_coalignn.json",
-                      "config_ef_coalignn.json"]
-    for c in cfg_candidates:
-        p = os.path.join(exp_path, c)
-        if os.path.exists(p):
-            return OmegaConf.load(p)
-    # fall back: look for any .json/.yaml
-    import glob
-    for ext in ("*.yaml", "*.json"):
-        found = glob.glob(os.path.join(exp_path, ext))
-        if found:
-            return OmegaConf.load(found[0])
-    raise FileNotFoundError(f"No config file found in {exp_path}")
+# def build_config_from_dir(exp_path: str) -> object:
+#     """Load the OmegaConf config saved in the experiment directory."""
+#     cfg_candidates = ["config.yaml", "config.json", "config_eg_coalignn.json",
+#                       "config_ef_coalignn.json"]
+#     for c in cfg_candidates:
+#         p = os.path.join(exp_path, c)
+#         if os.path.exists(p):
+#             return OmegaConf.load(p)
+#     # fall back: look for any .json/.yaml
+#     import glob
+#     for ext in ("*.yaml", "*.json"):
+#         found = glob.glob(os.path.join(exp_path, ext))
+#         if found:
+#             return OmegaConf.load(found[0])
+#     raise FileNotFoundError(f"No config file found in {exp_path}")
 
+
+def build_config_from_dir(exp_path: str, args) -> object:
+    """Build the full OmegaConf config for an experiment.
+
+    The Runner expects a top-level config with a 'model' sub-key.
+    This lives in the datasets directory, not the output directory.
+    """
+    name = os.path.basename(exp_path)
+    if "_ef_" in name or name.endswith("_ef"):
+        cfg_path = os.path.join(args.datasets_root, "ef", "config_ef_coalignn.json")
+    else:
+        cfg_path = os.path.join(args.datasets_root, "config_eg_coalignn.json")
+
+    if not os.path.exists(cfg_path):
+        raise FileNotFoundError(
+            f"Config not found: {cfg_path}\n"
+            "Set --datasets_root to the datasets/mp parent directory."
+        )
+    cfg = OmegaConf.load(cfg_path)
+    cfg.output_dir = exp_path   # checkpoints live in the output dir
+    return cfg
 
 # ---------------------------------------------------------------------------
 # Main analysis loop
@@ -135,8 +156,10 @@ def run_analysis(args):
         print(f"Analysing: {exp['name']}")
         print(f"{'='*60}")
 
-        cfg = build_config_from_dir(exp["path"])
-        cfg.output_dir = exp["path"]
+        # cfg = build_config_from_dir(exp["path"])
+        # cfg.output_dir = exp["path"]
+
+        cfg = build_config_from_dir(exp["path"], args)
 
         runner = AnalysisRunner(config=cfg, verbose=False)
 
@@ -271,6 +294,9 @@ def parse_args():
                    help="Number of test structures for Jacobian analysis per fold.")
     p.add_argument("--max_distance",          default=6, type=int,
                    help="Maximum graph distance to consider for Jacobian binning.")
+    
+    p.add_argument("--datasets_root", default="datasets/mp",
+                   help="Path to the MP datasets directory (contains config_eg_coalignn.json and ef/).")
     return p.parse_args()
 
 
