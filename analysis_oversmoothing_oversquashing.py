@@ -139,117 +139,98 @@ def build_config_from_dir(exp_path: str, args) -> object:
 # Main analysis loop
 # ---------------------------------------------------------------------------
 
-def run_analysis(args):
-    results = []
+def _agg_mad(fold_mad_list):
+    keys = ["mad_all", "mad_local", "mad_remote", "mad_gap"]
+    return {k: float(np.mean([d[k] for d in fold_mad_list if not np.isnan(d[k])]))
+            for k in keys}
 
-    experiments = discover_experiments(args.results_root, args.dataset)
-    if not experiments:
-        print(f"No experiments found in {args.results_root} for dataset '{args.dataset}'")
-        sys.exit(1)
 
-    print(f"Found {len(experiments)} experiment(s):")
-    for e in experiments:
-        print(f"  [{e['model']:8s} gn={e['gn_layers']}]  {e['name']}")
+def _agg_sens(fold_sens_list):
+    means = np.array([s["mean"] for s in fold_sens_list])  # [folds, D+1]
+    return {
+        "mean":   means.mean(axis=0).tolist(),
+        "std":    means.std(axis=0).tolist(),
+        "counts": np.array([s["counts"] for s in fold_sens_list]).sum(axis=0).tolist(),
+    }
 
-    for exp in experiments:
-        print(f"\n{'='*60}")
-        print(f"Analysing: {exp['name']}")
-        print(f"{'='*60}")
 
-        # cfg = build_config_from_dir(exp["path"])
-        # cfg.output_dir = exp["path"]
+def _analyse_one(exp: dict, args) -> dict:
+    """Run MAD + Jacobian analysis for a single experiment. Returns one record."""
+    print(f"\n{'='*60}")
+    print(f"Analysing: {exp['name']}")
+    print(f"{'='*60}")
 
-        cfg = build_config_from_dir(exp["path"], args)
+    cfg    = build_config_from_dir(exp["path"], args)
+    runner = AnalysisRunner(config=cfg, verbose=False)
 
-        runner = AnalysisRunner(config=cfg, verbose=False)
+    fold_mae, fold_mad, fold_sens = [], [], []
 
-        # MAE is averaged over folds; we also average MAD / sensitivity over folds
-        fold_mae, fold_mad, fold_sens = [], [], []
-        n_folds = args.n_folds
+    for fold in range(args.n_folds):
+        try:
+            load_best_checkpoint(runner, exp["path"], fold)
+        except FileNotFoundError as exc:
+            print(f"  [fold {fold}] SKIP: {exc}")
+            continue
 
-        for fold in range(n_folds):
-            try:
-                load_best_checkpoint(runner, exp["path"], fold)
-            except FileNotFoundError as e:
-                print(f"  [fold {fold}] SKIP: {e}")
-                continue
+        loaders = get_loaders(
+            config         = cfg,
+            root_dir       = args.root_dir,
+            sub_dir        = None,
+            dataset_name   = args.dataset_name,
+            target_file    = args.target_file,
+            fold           = fold,
+            trim_graph_dir = None,
+        )
+        test_loader = loaders[2]   # train, val, test
 
-            loaders = get_loaders(
-                config       = cfg,
-                root_dir     = args.root_dir,
-                sub_dir      = None,
-                dataset_name = args.dataset_name,
-                target_file  = args.target_file,
-                fold         = fold,
-                trim_graph_dir = None,
-            )
-            test_loader = loaders[2]   # train, val, test, _
+        # MAE from saved error.csv
+        error_csv = os.path.join(exp["path"], "error.csv")
+        if os.path.exists(error_csv):
+            df_err   = pd.read_csv(error_csv)
+            test_row = df_err[df_err["sample"] == "test"]
+            if not test_row.empty:
+                fold_mae.append(float(test_row["mean"].values[0]))
 
-            # -- MAE (from saved error.csv if available, else recompute) ----
-            error_csv = os.path.join(exp["path"], "error.csv")
-            if os.path.exists(error_csv):
-                df_err = pd.read_csv(error_csv)
-                test_row = df_err[df_err["sample"] == "test"]
-                if not test_row.empty:
-                    fold_mae.append(float(test_row["mean"].values[0]))
+        # MAD (oversmoothing)
+        t0 = time.time()
+        mad_dict = runner.compute_mad(test_loader,
+                                      max_structures=args.max_mad_structures)
+        print(f"  [fold {fold}] MAD={mad_dict['mad_all']:.4f}  "
+              f"MADGap={mad_dict['mad_gap']:.4f}  ({time.time()-t0:.1f} s)")
+        fold_mad.append(mad_dict)
 
-            # -- MAD (oversmoothing) ----------------------------------------
-            t0 = time.time()
-            mad_dict = runner.compute_mad(test_loader,
-                                          max_structures=args.max_mad_structures)
-            print(f"  [fold {fold}] MAD={mad_dict['mad_all']:.4f}  "
-                  f"MADGap={mad_dict['mad_gap']:.4f}  "
-                  f"({time.time()-t0:.1f} s)")
-            fold_mad.append(mad_dict)
+        # Jacobian sensitivity (oversquashing)
+        t0 = time.time()
+        sens_dict = runner.compute_jacobian_sensitivity(
+            test_loader,
+            n_structures = args.n_jacobian_structures,
+            max_distance = args.max_distance,
+        )
+        print(f"  [fold {fold}] sens@d=1:{sens_dict['mean'][1]:.4e}  "
+              f"sens@d=2:{sens_dict['mean'][2]:.4e}  ({time.time()-t0:.1f} s)")
+        fold_sens.append(sens_dict)
 
-            # -- Jacobian sensitivity (oversquashing) -----------------------
-            t0 = time.time()
-            sens_dict = runner.compute_jacobian_sensitivity(
-                test_loader,
-                n_structures = args.n_jacobian_structures,
-                max_distance = args.max_distance,
-            )
-            print(f"  [fold {fold}] sens@d=1:{sens_dict['mean'][1]:.4e}  "
-                  f"sens@d=2:{sens_dict['mean'][2]:.4e}  "
-                  f"({time.time()-t0:.1f} s)")
-            fold_sens.append(sens_dict)
+    rec = {
+        "name":         exp["name"],
+        "model":        exp["model"],
+        "gn_layers":    exp["gn_layers"],
+        "test_mae":     float(np.mean(fold_mae))   if fold_mae  else None,
+        "test_mae_std": float(np.std(fold_mae))    if fold_mae  else None,
+        "mad":          _agg_mad(fold_mad)          if fold_mad  else {},
+        "sensitivity":  _agg_sens(fold_sens)        if fold_sens else {},
+    }
+    print(f"  → test MAE = {rec['test_mae']}")
+    return rec
 
-        # -- Aggregate over folds ------------------------------------------
-        def _agg_mad(fold_mad_list):
-            keys = ["mad_all", "mad_local", "mad_remote", "mad_gap"]
-            return {k: float(np.mean([d[k] for d in fold_mad_list
-                                      if not np.isnan(d[k])]))
-                    for k in keys}
 
-        def _agg_sens(fold_sens_list, max_d):
-            means = np.array([s["mean"] for s in fold_sens_list])  # [folds, D+1]
-            return {
-                "mean":   means.mean(axis=0).tolist(),
-                "std":    means.std(axis=0).tolist(),
-                "counts": np.array([s["counts"] for s in fold_sens_list])
-                            .sum(axis=0).tolist(),
-            }
-
-        rec = {
-            "name":      exp["name"],
-            "model":     exp["model"],
-            "gn_layers": exp["gn_layers"],
-            "test_mae":  float(np.mean(fold_mae)) if fold_mae else None,
-            "test_mae_std": float(np.std(fold_mae)) if fold_mae else None,
-            "mad":       _agg_mad(fold_mad)  if fold_mad  else {},
-            "sensitivity": _agg_sens(fold_sens, args.max_distance) if fold_sens else {},
-        }
-        results.append(rec)
-        print(f"  → test MAE = {rec['test_mae']}")
-
-    # -- Save JSON -----------------------------------------------------------
-    os.makedirs(os.path.dirname(args.output_json) or ".", exist_ok=True)
-    with open(args.output_json, "w") as f:
+def _save_results(results: list, output_json: str):
+    """Write combined JSON + flat CSV."""
+    os.makedirs(os.path.dirname(output_json) or ".", exist_ok=True)
+    with open(output_json, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\nResults saved to {args.output_json}")
+    print(f"Results saved to {output_json}")
 
-    # -- Save flat CSV -------------------------------------------------------
-    csv_path = args.output_json.replace(".json", ".csv")
+    csv_path = output_json.replace(".json", ".csv")
     rows = []
     for r in results:
         rows.append({
@@ -269,6 +250,70 @@ def run_analysis(args):
     print(f"CSV saved to {csv_path}")
 
 
+def run_analysis(args):
+    # ── Single-experiment (shard) mode ── called from each SLURM job ────────
+    # Analyses only the given experiment directory and writes a private shard
+    # file.  No interaction with other jobs → no race conditions.
+    if args.exp_dir:
+        exp_dir   = args.exp_dir.rstrip("/")
+        exp_name  = os.path.basename(exp_dir)
+        parts     = exp_name.split("_")
+        gn_layers = next((int(p[2:]) for p in parts
+                          if p.startswith("gn") and p[2:].isdigit()), None)
+        model_type = "baseline" if "baseline" in exp_name else "lcsn"
+        exp = {"name": exp_name, "path": exp_dir,
+               "gn_layers": gn_layers, "model": model_type}
+
+        rec = _analyse_one(exp, args)
+
+        shard_dir  = os.path.dirname(args.output_json) or "."
+        shard_base = os.path.splitext(os.path.basename(args.output_json))[0]
+        shard_path = os.path.join(shard_dir, f"{shard_base}_{exp_name}.json")
+        os.makedirs(shard_dir, exist_ok=True)
+        with open(shard_path, "w") as f:
+            json.dump([rec], f, indent=2)
+        print(f"Shard saved: {shard_path}")
+        return
+
+    # ── Aggregation mode ── called once after all jobs finish ────────────────
+    # Merges all per-experiment shard files into one combined JSON + CSV.
+    # Missing shards are skipped with a warning (job not yet finished).
+    if not args.results_root:
+        print("ERROR: provide --exp_dir (per-job/shard mode) "
+              "or --results_root (aggregate mode).")
+        sys.exit(1)
+
+    experiments = discover_experiments(args.results_root, args.dataset)
+    if not experiments:
+        print(f"No experiments found in {args.results_root} for '{args.dataset}'")
+        sys.exit(1)
+
+    print(f"Found {len(experiments)} experiment(s):")
+    for e in experiments:
+        print(f"  [{e['model']:8s} gn={e['gn_layers']}]  {e['name']}")
+
+    shard_dir  = os.path.dirname(args.output_json) or "."
+    shard_base = os.path.splitext(os.path.basename(args.output_json))[0]
+
+    results = []
+    for exp in experiments:
+        shard_path = os.path.join(shard_dir, f"{shard_base}_{exp['name']}.json")
+        if os.path.exists(shard_path):
+            with open(shard_path) as f:
+                results.extend(json.load(f))
+            print(f"  Loaded shard: {os.path.basename(shard_path)}")
+        else:
+            print(f"  WARNING: no shard for {exp['name']} — skipping "
+                  f"(run its SLURM job first).")
+
+    if not results:
+        print("No shards found. Run all SLURM jobs before aggregating.")
+        sys.exit(1)
+
+    results.sort(key=lambda r: (r["model"], r["gn_layers"]))
+    _save_results(results, args.output_json)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -278,25 +323,36 @@ def parse_args():
         description="Oversmoothing & oversquashing analysis for CoALIGNN layer sweep",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--results_root",   required=True,
-                   help="Root directory containing layer-sweep output folders.")
+    # ── Mode selection (mutually exclusive) ─────────────────────────────────
+    p.add_argument("--exp_dir",        default=None,
+                   help="[Shard mode] Analyse a single experiment directory "
+                        "and write a per-experiment shard JSON. "
+                        "Used by each SLURM job.")
+    p.add_argument("--results_root",   default=None,
+                   help="[Aggregate mode] Root directory containing layer-sweep "
+                        "output folders. Merges existing shards into one JSON.")
     p.add_argument("--dataset",        default="mp_eg",
-                   help="Dataset prefix used in directory names (e.g. mp_eg, mp_ef).")
+                   help="Dataset prefix used in directory names (e.g. mp_eg, mp_ef). "
+                        "Only used in aggregate mode.")
+    # ── Data / checkpoint paths ─────────────────────────────────────────────
+    p.add_argument("--datasets_root",  default="datasets/mp",
+                   help="Path to the MP datasets directory "
+                        "(contains config_eg_coalignn.json and ef/).")
     p.add_argument("--root_dir",       default="datasets/mp",
                    help="Root dir for the dataset pickle and CSV.")
     p.add_argument("--dataset_name",   default="mp_lg_unit_cell_gap.pickle")
     p.add_argument("--target_file",    default="mp_gap_lg_unit_cell_id.csv")
+    # ── Analysis knobs ──────────────────────────────────────────────────────
     p.add_argument("--n_folds",        default=5, type=int)
-    p.add_argument("--output_json",    default="outputs/analysis/oversmoothing_oversquashing_mp_eg.json")
     p.add_argument("--max_mad_structures",    default=None, type=int,
                    help="Limit MAD computation to N structures per fold (None=all).")
     p.add_argument("--n_jacobian_structures", default=60, type=int,
                    help="Number of test structures for Jacobian analysis per fold.")
     p.add_argument("--max_distance",          default=6, type=int,
                    help="Maximum graph distance to consider for Jacobian binning.")
-    
-    p.add_argument("--datasets_root", default="datasets/mp",
-                   help="Path to the MP datasets directory (contains config_eg_coalignn.json and ef/).")
+    # ── Output ──────────────────────────────────────────────────────────────
+    p.add_argument("--output_json",    default="outputs/analysis/oversmoothing_oversquashing_mp_eg.json",
+                   help="Combined output JSON (aggregate mode) or shard naming base (shard mode).")
     return p.parse_args()
 
 
