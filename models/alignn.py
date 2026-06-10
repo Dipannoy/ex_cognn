@@ -500,7 +500,9 @@ class CoALIGNN(nn.Module):
         self.check_threshold = config.check_threshold
         
         self.num_act_graph_layers = config.action_args.num_act_graph_layers
-        self.num_in_act_graph_layers = config.action_args.num_in_act_graph_layers
+        # self.num_in_act_graph_layers = config.action_args.num_in_act_graph_layers
+        self.num_in_act_graph_layers = 1
+
         self.action_net = config.action_args.action_net
 
     
@@ -526,22 +528,22 @@ class CoALIGNN(nn.Module):
             self.out_act_graph_net = ActionNet(self.num_act_graph_layers, 
                                                input_node_dim, 2)
             '''
-            if(self.action_net == 'ActionNet'):
-                self.in_act_graph_net = ActionNet(self.num_in_act_graph_layers, 
-                                                input_node_dim, 2)
-                self.out_act_graph_net = ActionNet(self.num_act_graph_layers, 
-                                                input_node_dim, 2)
-            elif(self.action_net == 'ActionNet_mean_gnn_node_edge'):
-                self.in_act_graph_net = ActionNet_mean_gnn_node_edge(self.num_in_act_graph_layers, 
-                                                input_node_dim, 2)
-                self.out_act_graph_net = ActionNet_mean_gnn_node_edge(self.num_act_graph_layers, 
-                                                input_node_dim, 2)
-            elif(self.action_net == 'ActionNet_mean_gnn_node'):
-                self.in_act_graph_net = ActionNet_mean_gnn_node(self.num_in_act_graph_layers, 
-                                                input_node_dim, 2)
-                self.out_act_graph_net = ActionNet_mean_gnn_node(self.num_act_graph_layers, 
-                                                input_node_dim, 2)
-            elif(self.action_net == 'EdgeScoringNet'):
+            # if(self.action_net == 'ActionNet'):
+            #     self.in_act_graph_net = ActionNet(self.num_in_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            #     self.out_act_graph_net = ActionNet(self.num_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            # elif(self.action_net == 'ActionNet_mean_gnn_node_edge'):
+            #     self.in_act_graph_net = ActionNet_mean_gnn_node_edge(self.num_in_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            #     self.out_act_graph_net = ActionNet_mean_gnn_node_edge(self.num_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            # elif(self.action_net == 'ActionNet_mean_gnn_node'):
+            #     self.in_act_graph_net = ActionNet_mean_gnn_node(self.num_in_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            #     self.out_act_graph_net = ActionNet_mean_gnn_node(self.num_act_graph_layers, 
+            #                                     input_node_dim, 2)
+            if(self.action_net == 'EdgeScoringNet'):
                 self.edge_scoring_net = EdgeScoringNet(
                     node_dim=input_node_dim,
                     edge_dim=input_node_dim,
