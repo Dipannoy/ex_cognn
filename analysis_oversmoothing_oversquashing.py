@@ -161,6 +161,8 @@ def _analyse_one(exp: dict, args) -> dict:
     print(f"{'='*60}")
 
     cfg    = build_config_from_dir(exp["path"], args)
+    print('=====================CFG from ananlysis_oversmoothing_oversquashing.py=====================')
+    print(cfg)
     runner = AnalysisRunner(config=cfg, verbose=False)
 
     fold_mae, fold_mad, fold_sens = [], [], []
