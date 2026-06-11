@@ -115,12 +115,19 @@ def discover_experiments(results_root: str, dataset: str) -> list[dict]:
 
 
 def build_config_from_dir(exp_path: str, args) -> object:
-    """Build the full OmegaConf config for an experiment.
+    """Load the base JSON config and patch all model parameters from the
+    experiment directory name — mirrors what main.py does at training time.
 
-    The Runner expects a top-level config with a 'model' sub-key.
-    This lives in the datasets directory, not the output directory.
+    Layer-sweep naming convention (from run_layer_sweep_mp.sh):
+        mp_{prop}_baseline_gc{C}_mn{N}_gn{L}_{TAG}
+        mp_{prop}_lcsn_gc{C}_mn{N}_gn{L}_th{TH_TAG}_sw{SW_TAG}_{TAG}
+    where TH_TAG / SW_TAG replace '.' with '_'.
     """
+    import re as _re
+
     name = os.path.basename(exp_path)
+
+    # ── Choose base config file ─────────────────────────────────────────────
     if "_ef_" in name or name.endswith("_ef"):
         cfg_path = os.path.join(args.datasets_root, "ef", "config_ef_coalignn.json")
     else:
@@ -133,6 +140,57 @@ def build_config_from_dir(exp_path: str, args) -> object:
         )
     cfg = OmegaConf.load(cfg_path)
     cfg.output_dir = exp_path   # checkpoints live in the output dir
+
+    # ── Parse numeric tokens from directory name ────────────────────────────
+    parts = name.split("_")
+
+    def _find_int(prefix):
+        for p in parts:
+            if p.startswith(prefix) and p[len(prefix):].isdigit():
+                return int(p[len(prefix):])
+        return None
+
+    gcn_layers    = _find_int("gn") or 4
+    cutoff        = _find_int("gc") or 10
+    max_neighbors = _find_int("mn") or 24
+
+    model_type = "baseline" if "baseline" in name else "lcsn"
+
+    # TH_TAG and SW_TAG use '_' in place of '.' — reconstruct with regex
+    edge_threshold  = 0.0
+    sparsity_weight = 0.0
+    m_th = _re.search(r'_th([\d_]+)_sw', name)
+    m_sw = _re.search(r'_sw([\d_]+)(?:_\d{4}|_[a-z]|$)', name)
+    if m_th:
+        edge_threshold = float(m_th.group(1).replace("_", "."))
+    if m_sw:
+        sparsity_weight = float(m_sw.group(1).replace("_", "."))
+
+    # ── Patch config — mirrors main.py's main() function ───────────────────
+    # Fixed for all layer-sweep jobs (from run_layer_sweep_mp.sh):
+    #   --aln_layer 0  --anlg_layer 0  --in_act_graph_layer 1
+    #   --action_net LearnableCutoffScoringNet
+    cfg.model.alignn_layers                        = 0
+    cfg.model.gcn_layers                           = gcn_layers
+    cfg.model.edge_threshold                       = edge_threshold
+    cfg.model.check_threshold                      = (model_type == "lcsn")
+    cfg.model.action_args.num_act_graph_layers     = 1 if model_type == "lcsn" else 0
+    cfg.model.action_args.num_act_linegraph_layers = 0
+    cfg.model.action_args.num_in_act_graph_layers  = 1
+    cfg.model.action_args.action_net               = "LearnableCutoffScoringNet"
+    cfg.model.random_weight                        = 0
+    cfg.model.logit_1                              = 0.5
+    cfg.model.logit_2                              = 0.5
+    cfg.model.init_r_cut                           = 3.5
+    cfg.sparsity_weight                            = sparsity_weight
+    cfg.cutoff                                     = cutoff
+    cfg.max_neighbors                              = max_neighbors
+    cfg.neighbor_strategy                          = "k-nearest"
+
+    print(f"  [build_config] {name}")
+    print(f"    model={model_type}  gcn={gcn_layers}  gc={cutoff}  mn={max_neighbors}"
+          f"  th={edge_threshold}  sw={sparsity_weight}")
+
     return cfg
 
 # ---------------------------------------------------------------------------
@@ -161,8 +219,6 @@ def _analyse_one(exp: dict, args) -> dict:
     print(f"{'='*60}")
 
     cfg    = build_config_from_dir(exp["path"], args)
-    print('=====================CFG from ananlysis_oversmoothing_oversquashing.py=====================')
-    print(cfg)
     runner = AnalysisRunner(config=cfg, verbose=False)
 
     fold_mae, fold_mad, fold_sens = [], [], []
