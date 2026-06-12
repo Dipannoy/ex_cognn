@@ -160,7 +160,7 @@ def build_config_from_dir(exp_path: str, args) -> object:
     edge_threshold  = 0.0
     sparsity_weight = 0.0
     m_th = _re.search(r'_th([\d_]+)_sw', name)
-    m_sw = _re.search(r'_sw([\d_]+)(?:_\d{4}|_[a-z]|$)', name)
+    m_sw = _re.search(r'_sw([\d_]+?)(?:_\d{4}|_[a-z]|$)', name)
     if m_th:
         edge_threshold = float(m_th.group(1).replace("_", "."))
     if m_sw:
