@@ -355,7 +355,8 @@ def run_analysis(args):
 
     results = []
     for exp in experiments:
-        shard_path = os.path.join(shard_dir, f"{shard_base}_{exp['name']}.json")
+        shard_path = os.path.join(shard_dir, f"{shard_base}_{exp['name']}_{exp['name']}.json")
+        print(shard_path)
         if os.path.exists(shard_path):
             with open(shard_path) as f:
                 results.extend(json.load(f))
