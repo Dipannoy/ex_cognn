@@ -121,7 +121,7 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
     l, m, ms = extract_mae(baseline)
     _plot(ax_mae, l, m, ms, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
     l, m, ms = extract_mae(lcsn)
-    _plot(ax_mae, l, m, ms, C_COGNN, MARKER_COGNN, "CoALIGNN (pruned)")
+    _plot(ax_mae, l, m, ms, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
     ax_mae.set_xlabel("Number of GCN layers")
     ax_mae.set_ylabel(f"Test MAE (eV)")
     ax_mae.set_title(f"{prop_label} — Test MAE vs depth")
@@ -134,7 +134,7 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
                 label="Baseline (dense)")
     l, mg = extract_mad_gap(lcsn)
     ax_mad.plot(l, mg, color=C_COGNN, marker=MARKER_COGNN,
-                label="CoALIGNN (pruned)")
+                label="CoGNN (pruned)")
     ax_mad.axhline(0, color="grey", linestyle="--", linewidth=1, alpha=0.7)
     ax_mad.set_xlabel("Number of GCN layers")
     ax_mad.set_ylabel("MADGap")
@@ -175,7 +175,7 @@ def plot_oversquashing(ax, baseline, lcsn, prop_label: str,
             m, s = sens_lcsn[n_layers]
             ax.plot(distances, m, color=C_COGNN, linestyle=ls,
                     marker=MARKER_COGNN,
-                    label=f"CoALIGNN gn={n_layers}")
+                    label=f"CoGNN gn={n_layers}")
             ax.fill_between(distances, m - s, m + s, color=C_COGNN, alpha=0.12)
 
     ax.set_yscale("log")
@@ -216,7 +216,7 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
             plot_oversmoothing(axes1[row, 0], axes1[row, 1],
                                baseline, lcsn, prop_label)
 
-        fig1.suptitle("Oversmoothing Analysis: CoALIGNN vs Baseline",
+        fig1.suptitle("Oversmoothing Analysis: CoGNN vs Baseline",
                       fontsize=14, fontweight="bold", y=1.01)
         fig1.tight_layout()
         p1 = os.path.join(out_dir, "oversmoothing.pdf")
@@ -259,7 +259,7 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
             plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label)
             plot_oversquashing(ax_sq,  baseline, lcsn, prop_label)
 
-        fig3.suptitle("CoALIGNN: Oversmoothing & Oversquashing Analysis (MP20)",
+        fig3.suptitle("CoGNN: Oversmoothing & Oversquashing Analysis (MP20)",
                       fontsize=14, fontweight="bold")
         p3 = os.path.join(out_dir, "oversmoothing_oversquashing_combined.pdf")
         fig3.savefig(p3, bbox_inches="tight", dpi=300)
