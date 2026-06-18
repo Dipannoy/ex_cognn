@@ -1,6 +1,8 @@
 """Module to train for a folder with formatted dataset."""
 import csv
 import fcntl
+import glob
+import json
 import os
 import sys
 import time
@@ -87,7 +89,69 @@ def create_5_fold_CV(root_dir, target_file, output_dir):
         train_X.to_csv(output_dir+"/train_ids_"+str(fold)+".csv", index=False)
         val_X.to_csv(output_dir+"/val_ids_"+str(fold)+".csv", index=False)
         test_X.to_csv(output_dir+"/test_ids_"+str(fold)+".csv", index=False)
-def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
+
+
+def find_edge_retention_rate(json_pattern, threshold):
+
+    json_files = sorted(glob.glob(json_pattern))
+
+    if not json_files:
+        print(f"No files found matching pattern: {json_pattern}")
+        exit()
+
+    print(f"Found {len(json_files)} files. Calculating sparsity for threshold = {threshold}...\n")
+
+    fold_percentages = []
+    fold_kept_counts = []
+
+    # 2. Process each fold
+    for file_path in json_files:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        total_edges_in_fold = 0
+        kept_edges_in_fold = 0
+        
+        # Process every crystal structure in this specific fold
+        for jid, crystal_data in data.items():
+            weights = crystal_data.get("prop_dist", [])
+            
+            if not weights:
+                continue
+                
+            weights_arr = np.array(weights)
+            
+            # Tally the edges
+            total_edges_in_fold += len(weights_arr)
+            kept_edges_in_fold += np.sum(weights_arr >= threshold)
+            
+        # Calculate stats for this specific fold
+        if total_edges_in_fold > 0:
+            fold_pct = (kept_edges_in_fold / total_edges_in_fold) * 100
+            fold_percentages.append(fold_pct)
+            fold_kept_counts.append(kept_edges_in_fold)
+            
+            filename = file_path.split('/')[-1]
+            print(f"Fold: {filename}")
+            print(f"  -> Kept: {kept_edges_in_fold:,} / {total_edges_in_fold:,} edges ({fold_pct:.2f}%)")
+
+    # 3. Final Aggregation
+    if fold_percentages:
+        mean_pct = np.mean(fold_percentages)
+        std_pct = np.std(fold_percentages)
+        avg_kept_count = np.mean(fold_kept_counts)
+        
+        print("\n" + "="*50)
+        print("FINAL 5-FOLD CV RESULTS:")
+        print("="*50)
+        print(f"Average Kept Percentage:    {mean_pct:.2f}% ± {std_pct:.2f}%")
+        print(f"Average Dropped Percentage: {100 - mean_pct:.2f}%")
+        print(f"Average Kept Edges per run: {avg_kept_count:,.0f}")
+    
+    return mean_pct, std_pct
+
+
+def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, learning_rate, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
         target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
         parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', init_r_cut=3.5, **kwargs):
     """Loader preparation"""
@@ -111,7 +175,10 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.target = target
     config.batch_size = int(batch_size)
     config.epochs = int(epochs)
+    config.learning_rate = float(learning_rate)
     config.optim.scheduler.epochs = int(epochs)
+    config.optim.scheduler.learning_rate = float(learning_rate)
+    config.optim.optimizer.learning_rate = float(learning_rate)
     config.exp_name = exp_name
     config.output_dir = os.path.join(parent_dir, output_dir)
     os.makedirs(config.output_dir, exist_ok=True)
@@ -144,6 +211,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
                             target_file=target_file,
                             fold=l,
                             trim_graph_dir=trim_graph_dir)
+        
         '''
         if create_split==True:
             print('Split On')
@@ -151,7 +219,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
                                 root_dir=root_dir, 
                                 sub_dir=sub_dir, 
                                 dataset_name=dataset_name,
-                                target_file=target_file,
+                                target_file=target_file,g
                                 target_file2=target_file2)
         else:
             print('Split Off')
@@ -198,6 +266,10 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     print('train_std_mae: ', np.std(tr_arr))
     print('val_std_mae: ', np.std(val_arr))
     print('test_std_mae: ',np.std(test_arr))
+    json_pattern = config.output_dir + "/test_"+config.suffix+"_*_prob_dict.json" 
+
+    edge_retention_mean, edge_retention_std = find_edge_retention_rate(json_pattern, threshold=edge_threshold)
+
     # print('inference_time_avg: ', np.mean(infer_time_arr))
     # print('inference_time_std: ', np.std(infer_time_arr))
     # print('train_time_avg: ', np.mean(train_time_arr))
@@ -228,6 +300,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         float(np.mean(test_arr)),float(np.std(test_arr)),
         float(np.mean(infer_time_arr)), float(np.std(infer_time_arr)),
         float(np.mean(train_time_arr)), float(np.std(train_time_arr)),
+        float(edge_retention_mean), float(edge_retention_std),
         output_dir,
     ]
     global_header = [
@@ -238,6 +311,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         'test_mean',  'test_std',
         'inference_time_mean', 'inference_time_std',
         'train_time_mean', 'train_time_std',
+        'edge_retention_mean', 'edge_retention_std',
         'output_dir',
     ]
     os.makedirs(os.path.dirname(global_results_csv) or '.', exist_ok=True)
@@ -340,7 +414,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--cutoff", default=8, help="Batch size, generally 64"
+        "--learning_rate", default=None, help="Learning rate, generally 0.001"
+    )
+
+    parser.add_argument(
+        "--cutoff", default=8, help="cutoff distance, generally 8"
     )
     parser.add_argument(
         "--max_neighbors", default=12, help="max neighbors, generally 12"
@@ -349,7 +427,7 @@ if __name__ == "__main__":
         "--epochs", default=None, help="Number of epochs, generally 300"
     )
     parser.add_argument(
-        "--edge_threshold", default=0.5, help="Number of epochs, generally 300"
+        "--edge_threshold", default=0.5, help="Edge threshold, generally 0.5"
     )
 
     parser.add_argument(
@@ -447,6 +525,7 @@ if __name__ == "__main__":
         keep_data_order=args.keep_data_order,
         classification_threshold=args.classification_threshold,
         batch_size=(args.batch_size),
+        learning_rate=(args.learning_rate),
         epochs=(args.epochs),
         neighbor_strategy = args.neighbor_strategy,
         file_format=(args.file_format),

@@ -37,7 +37,7 @@
     "max_neighbors": 12,
     "keep_data_order": true,
     "output_dir": "output_config_ef_coalignn",
-    "suffix": "lg_unit_cell_ef",
+    "suffix": "mp_large_ef",
     "early_stopping_patience": 50,
     "model": {
         "name": "alignn",
