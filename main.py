@@ -268,7 +268,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     print('test_std_mae: ',np.std(test_arr))
     json_pattern = config.output_dir + "/test_"+config.suffix+"_*_prob_dict.json" 
 
-    edge_retention_mean, edge_retention_std = find_edge_retention_rate(json_pattern, threshold=edge_threshold)
+    edge_retention_mean, edge_retention_std = find_edge_retention_rate(json_pattern, threshold=float(edge_threshold))
 
     # print('inference_time_avg: ', np.mean(infer_time_arr))
     # print('inference_time_std: ', np.std(infer_time_arr))
