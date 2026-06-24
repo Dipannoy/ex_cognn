@@ -414,7 +414,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--learning_rate", default=None, help="Learning rate, generally 0.001"
+        "--learning_rate", default=0.001, help="Learning rate, generally 0.001"
     )
 
     parser.add_argument(
@@ -424,7 +424,7 @@ if __name__ == "__main__":
         "--max_neighbors", default=12, help="max neighbors, generally 12"
     )
     parser.add_argument(
-        "--epochs", default=None, help="Number of epochs, generally 300"
+        "--epochs", default=750, help="Number of epochs, generally 300"
     )
     parser.add_argument(
         "--edge_threshold", default=0.5, help="Edge threshold, generally 0.5"
