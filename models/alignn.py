@@ -498,6 +498,7 @@ class CoALIGNN(nn.Module):
         self.mask_triplets = config.mask_triplets
         self.edge_threshold = config.edge_threshold
         self.check_threshold = config.check_threshold
+        self.no_edge = config.no_edge
         
         self.num_act_graph_layers = config.action_args.num_act_graph_layers
         # self.num_in_act_graph_layers = config.action_args.num_in_act_graph_layers
@@ -791,7 +792,10 @@ class CoALIGNN(nn.Module):
                     w_bonds = w_bonds * (w_bonds >= self.edge_threshold).float()
                 survived_ratios['gcn'].append((w_bonds.detach().sum() / g.num_edges()).item())
             else:
-                w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
+                if self.no_edge:
+                    w_bonds = torch.zeros(g.num_edges(), requires_grad=False).to(x.device)
+                else:
+                    w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
 
 
             x, y = gcn_layer(g, x, y, w_bonds)
@@ -1103,4 +1107,5 @@ class MultiplicativeGateScoringNet(nn.Module):
         node_score = self.node_mlp(torch.cat([x[src], x[dst]], dim=-1))   # [E, 1]
         logit = (gate * node_score).squeeze(-1)                            # [E]
         return torch.stack([logit, -logit], dim=-1)                        # [E, 2]
+
 

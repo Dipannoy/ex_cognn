@@ -32,24 +32,24 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 # Paths to the test-set fold-0 explainability PNGs + JSON keys
 # ---------------------------------------------------------------------------
-BASE = os.path.join(os.path.dirname(__file__), "downloaded_results")
+BASE = os.path.join(os.path.dirname(__file__), "downloaded_results/outputs_latest_data")
 
 EXPERIMENTS = [
     {
         "row_label":  r"JARVIS $E_{\rm g}$",
-        "theta":      r"$\theta = 0.4$",
-        "threshold":  0.4,
-        "dir":        os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_4_sw0_001_0506"),
-        "json_key":   "pbe_eg_bvm_struct",
+        "theta":      r"$\theta = 0.3$",
+        "threshold":  0.3,
+        "dir":        os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_3_sw0_001"),
+        "json_key":   "test_jarvis_large_eg",
         "png_name":   "explainability_test_jarvis_lg_cell_eg_0.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"JARVIS $E_{\rm f}$",
-        "theta":      r"$\theta = 0.3$",
-        "threshold":  0.3,
-        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_3_sw0_001_0510"),
-        "json_key":   "jarvis_lg_gap",
+        "theta":      r"$\theta = 0.5$",
+        "threshold":  0.5,
+        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "json_key":   "test_jarvis_large_ef",
         "png_name":   "explainability_test_jarvis_lg_cell_ef_0.png",
         "group":      "JARVIS",
     },
@@ -57,17 +57,17 @@ EXPERIMENTS = [
         "row_label":  r"MP $E_{\rm g}$",
         "theta":      r"$\theta = 0.2$",
         "threshold":  0.2,
-        "dir":        os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001_0506"),
-        "json_key":   "lg_unit_cell_eg",
+        "dir":        os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001"),
+        "json_key":   "test_mp_large_eg",
         "png_name":   "explainability_test_mp_lg_cell_eg_0.png",
         "group":      "MP",
     },
     {
         "row_label":  r"MP $E_{\rm f}$",
-        "theta":      r"$\theta = 0.3$",
-        "threshold":  0.3,
-        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_3_sw0_001_0510"),
-        "json_key":   "lg_unit_cell_ef",
+        "theta":      r"$\theta = 0.5$",
+        "threshold":  0.5,
+        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "json_key":   "test_mp_large_ef",
         "png_name":   "explainability_test_mp_lg_cell_ef_0.png",
         "group":      "MP",
     },
@@ -372,8 +372,8 @@ for y_g, label_g in [(y_jarvis, "JARVIS"), (y_mp, "Materials Project")]:
 # ---------------------------------------------------------------------------
 # Save
 # ---------------------------------------------------------------------------
-out_path = os.path.join(os.path.dirname(__file__), "explainability_figure.pdf")
-png_path = os.path.join(os.path.dirname(__file__), "explainability_figure.png")
+out_path = os.path.join(os.path.dirname(__file__), "explainability_figure_latest_data.pdf")
+png_path = os.path.join(os.path.dirname(__file__), "explainability_figure_latest_data.png")
 
 fig.savefig(out_path, dpi=300, format="pdf")
 fig.savefig(png_path, dpi=300, format="png")

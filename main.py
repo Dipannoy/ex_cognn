@@ -152,7 +152,7 @@ def find_edge_retention_rate(json_pattern, threshold):
 
 
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, learning_rate, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
-        target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold,in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
+        target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold, no_edge, in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
         parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', init_r_cut=3.5, **kwargs):
     """Loader preparation"""
     if sub_dir is None:
@@ -164,6 +164,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.model.gcn_layers = int(gcn_layer)
     config.model.edge_threshold = float(edge_threshold)
     config.model.check_threshold = check_threshold
+    config.model.no_edge = no_edge
     config.model.action_args.num_act_graph_layers = int(action_net_glayer)
     config.model.action_args.num_act_linegraph_layers = int(action_net_lglayer)
     config.model.action_args.num_in_act_graph_layers = int(in_act_graph_layer)
@@ -471,6 +472,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--check_threshold", default='true', type=str2bool, help="check_threshold",
     )
+
+    parser.add_argument(
+        "--no_edge", default='false', type=str2bool, help="Whether to remove edges",
+    )
     parser.add_argument(
         "--in_act_graph_layer", default=1, type=int, help="in_act_graph_layer",
     )
@@ -534,6 +539,7 @@ if __name__ == "__main__":
         repeat = args.repeat,
         create_split = args.create_split,
         check_threshold = args.check_threshold,
+        no_edge = args.no_edge,
         in_act_graph_layer = args.in_act_graph_layer,
         action_net = args.action_net,
         random_weight = args.random_weight,
