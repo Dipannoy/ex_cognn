@@ -149,6 +149,7 @@ def build_config(
     target: str,
     action_net: str,
     edge_threshold: float,
+    no_edge: bool,
     sparsity_weight: float,
     batch_size: int,
     epochs: int,
@@ -174,6 +175,8 @@ def build_config(
     cfg.model.gcn_layers    = gcn_layers
     cfg.model.edge_threshold  = float(edge_threshold)
     cfg.model.check_threshold = edge_threshold > 0.0
+    cfg.model.no_edge = no_edge
+
 
     cfg.model.action_args.num_act_graph_layers    = num_act_graph_layers
     cfg.model.action_args.num_in_act_graph_layers = num_in_act_graph_layers
@@ -222,6 +225,7 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
         target               = args.src_target,
         action_net           = args.action_net,
         edge_threshold       = args.edge_threshold,
+        no_edge              = args.no_edge,
         sparsity_weight      = args.sparsity_weight,
         batch_size           = args.batch_size,
         epochs               = args.epochs,
@@ -250,6 +254,7 @@ def run_phase1(args, phase1_output_dir: str, bcast_consolidated_dir: str):
             target               = args.src_target,
             action_net           = args.action_net,
             edge_threshold       = args.edge_threshold,
+            no_edge              = args.no_edge,
             sparsity_weight      = args.sparsity_weight,
             batch_size           = args.batch_size,
             epochs               = args.epochs,
@@ -375,6 +380,7 @@ def run_phase2(
             target               = args.tgt_target,
             action_net           = "none",           # unused when layers=0
             edge_threshold       = args.edge_threshold,
+            no_edge              = args.no_edge,
             sparsity_weight      = 0.0,              # no sparsity loss in Phase 2
             batch_size           = args.batch_size,
             epochs               = args.epochs,
@@ -465,6 +471,8 @@ def parse_args():
                              "EdgeOnlyScoringNet", "MultiplicativeGateScoringNet"])
     p.add_argument("--edge_threshold",    default=0.3, type=float)
     p.add_argument("--sparsity_weight",   default=0.001, type=float)
+    p.add_argument("--no_edge", default='false', type=str2bool, help="Whether to remove edges",)
+        
 
     # Model architecture (same for both phases)
     p.add_argument("--aln_layer",  default=0, type=int, help="alignn_layers")
