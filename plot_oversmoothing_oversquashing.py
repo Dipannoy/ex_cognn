@@ -216,8 +216,8 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
             plot_oversmoothing(axes1[row, 0], axes1[row, 1],
                                baseline, lcsn, prop_label)
 
-        fig1.suptitle("Oversmoothing Analysis: CoGNN vs Baseline",
-                      fontsize=14, fontweight="bold", y=1.01)
+        # fig1.suptitle("Oversmoothing Analysis: CoGNN vs Baseline",
+        #               fontsize=14, fontweight="bold", y=1.01)
         fig1.tight_layout()
         p1 = os.path.join(out_dir, "oversmoothing.pdf")
         fig1.savefig(p1, bbox_inches="tight", dpi=300)
@@ -235,8 +235,8 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
             baseline, lcsn = split_by_model(records)
             plot_oversquashing(axes2[0, col], baseline, lcsn, prop_label)
 
-        fig2.suptitle("Oversquashing Analysis: Jacobian Sensitivity vs Distance",
-                      fontsize=14, fontweight="bold")
+        # fig2.suptitle("Oversquashing Analysis: Jacobian Sensitivity vs Distance",
+        #               fontsize=14, fontweight="bold")
         fig2.tight_layout()
         p2 = os.path.join(out_dir, "oversquashing.pdf")
         fig2.savefig(p2, bbox_inches="tight", dpi=300)
