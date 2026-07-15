@@ -184,7 +184,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.output_dir = os.path.join(parent_dir, output_dir)
     os.makedirs(config.output_dir, exist_ok=True)
     config.sparsity_weight = float(sparsity_weight)
-    config.cutoff = int(cutoff)  
+    config.cutoff = float(cutoff)  
     config.max_neighbors = int(max_neighbors)
     config.neighbor_strategy = neighbor_strategy
 

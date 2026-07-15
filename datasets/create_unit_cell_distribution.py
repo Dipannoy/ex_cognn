@@ -65,7 +65,7 @@ ax.axvline(mp_median, color=C_MP, linestyle='dashed', linewidth=2,
 # ---------------------------------------------------------------------------
 # 4. Formatting
 # ---------------------------------------------------------------------------
-ax.set_title("Unit Cell Size Distribution Across Datasets")
+# ax.set_title("Unit Cell Size Distribution Across Datasets")
 ax.set_xlabel("Number of Atoms per Unit Cell")
 ax.set_ylabel("Density")
 ax.set_xlim(0, 300) # Cut off extreme outliers for a cleaner plot
