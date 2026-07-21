@@ -12,6 +12,7 @@ outputs/
 downloaded_results/
 datasets/jarvis/jarvis_all_cifs/
 datasets/jarvis/jarvis_v11_cifs/
+datasets/jarvis/jarvis_v11_cifs_full/
 datasets/jarvis/jarvis_v10/
 datasets/jarvis/6815699/
 datasets/mp/mp_eg_old_version/
