@@ -22,6 +22,8 @@ from sklearn.model_selection import KFold
 from runner import Runner
 import numpy as np
 import torch
+import shutil
+
 
 # def get_loaders(
 #     config,
@@ -205,6 +207,10 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
 
 
     l = repeat    
+    shutil.copy2(os.path.join(root_dir, "train_ids_"+str(l)+".csv"), config.output_dir)
+    shutil.copy2(os.path.join(root_dir, "val_ids_"+str(l)+".csv"), config.output_dir)
+    shutil.copy2(os.path.join(root_dir, "test_ids_"+str(l)+".csv"), config.output_dir)
+
     loaders = get_loaders(config=config, 
                         root_dir=root_dir, 
                         sub_dir=sub_dir, 
