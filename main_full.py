@@ -296,6 +296,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         float(cutoff),
         int(max_neighbors),
         int(gcn_layer),
+        int(repeat),
         float(np.mean(tr_arr)),  float(np.std(tr_arr)),
         float(np.mean(val_arr)), float(np.std(val_arr)),
         float(np.mean(test_arr)),float(np.std(test_arr)),
@@ -307,6 +308,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     global_header = [
         'dataset', 'action_net', 'threshold', 'sparsity_weight',
         'init_r_cut', 'graph_cutoff', 'max_neighbors', 'gcn_layer',
+        'split',
         'train_mean', 'train_std',
         'val_mean',   'val_std',
         'test_mean',  'test_std',
