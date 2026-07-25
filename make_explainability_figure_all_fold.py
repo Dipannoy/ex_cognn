@@ -40,36 +40,36 @@ BASE = os.path.join(os.path.dirname(__file__), "downloaded_results/outputs_lates
 EXPERIMENTS = [
     {
         "row_label":  r"JARVIS $E_{\rm g}$",
-        "theta":      r"$\theta = 0.1$",
-        "threshold":  0.1,
-        "dir":        os.path.join(BASE, "jarvis_eg_multiplicative_gate_scoring_net_th0_1_sw0_001"),
+        "theta":      r"$\theta = 0.3$",
+        "threshold":  0.3,
+        "dir":        os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_3_sw0_001"),
         "json_key":   "test_jarvis_large_eg",
         "png_name":   "explainability_test_jarvis_lg_cell_eg_all_folds.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"JARVIS $E_{\rm f}$",
-        "theta":      r"$\theta = 0.1$",
-        "threshold":  0.1,
-        "dir":        os.path.join(BASE, "jarvis_ef_multiplicative_gate_scoring_net_th0_1_sw0_001"),
+        "theta":      r"$\theta = 0.5$",
+        "threshold":  0.5,
+        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
         "json_key":   "test_jarvis_large_ef",
         "png_name":   "explainability_test_jarvis_lg_cell_ef_all_folds.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"MP $E_{\rm g}$",
-        "theta":      r"$\theta = 0.1$",
-        "threshold":  0.1,
-        "dir":        os.path.join(BASE, "mp_eg_multiplicative_gate_scoring_net_th0_1_sw0_001"),
+        "theta":      r"$\theta = 0.2$",
+        "threshold":  0.2,
+        "dir":        os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001"),
         "json_key":   "test_mp_large_eg",
         "png_name":   "explainability_test_mp_lg_cell_eg_all_folds.png",
         "group":      "MP",
     },
     {
         "row_label":  r"MP $E_{\rm f}$",
-        "theta":      r"$\theta = 0.2$",
-        "threshold":  0.2,
-        "dir":        os.path.join(BASE, "mp_ef_multiplicative_gate_scoring_net_th0_2_sw0_001"),
+        "theta":      r"$\theta = 0.5$",
+        "threshold":  0.5,
+        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
         "json_key":   "test_mp_large_ef",
         "png_name":   "explainability_test_mp_lg_cell_ef_all_folds.png",
         "group":      "MP",
@@ -318,7 +318,7 @@ print("=" * 60)
 
 N_ROWS = len(EXPERIMENTS)   # 4
 N_COLS = 2                  # scatter | histogram
-FIG_W  = 14.0
+FIG_W  = 10.0
 FIG_H  = 10.5
 
 fig = plt.figure(figsize=(FIG_W, FIG_H))
@@ -351,7 +351,7 @@ for row_idx, exp in enumerate(EXPERIMENTS):
     left_img, right_img = load_and_split(os.path.join(exp["dir"], exp["png_name"]))
 
     for col_idx, (ax, im) in enumerate(zip(axes[row_idx], [left_img, right_img])):
-        ax.imshow(im, interpolation="lanczos", aspect="auto")
+        ax.imshow(im, interpolation="lanczos", aspect="equal")
         ax.set_xticks([])
         ax.set_yticks([])
         for spine in ax.spines.values():
@@ -420,8 +420,8 @@ for y_g, label_g in [(y_jarvis, "JARVIS"), (y_mp, "Materials Project")]:
 # ---------------------------------------------------------------------------
 # Save
 # ---------------------------------------------------------------------------
-out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_mgsn_all_folds.pdf")
-out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_mgsn_all_folds.png")
+out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_lcsn_all_folds.pdf")
+out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_lcsn_all_folds.png")
 
 fig.savefig(out_pdf, dpi=300, format="pdf")
 fig.savefig(out_png, dpi=300, format="png")

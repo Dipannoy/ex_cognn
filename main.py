@@ -152,7 +152,7 @@ def find_edge_retention_rate(json_pattern, threshold):
 
 
 def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_threshold, batch_size, learning_rate, exp_name, epochs, neighbor_strategy, target, gcn_layer, target_file, 
-        target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold, no_edge, in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
+        target_file2, action_net_glayer, action_net_lglayer, sub_dir, config_name, dataset_name,repeat,create_split,check_threshold, random_pruning, random_drop_rate, no_edge, in_act_graph_layer,action_net,random_weight,logit_1,logit_2,trim_graph_dir,
         parent_dir,sparsity_weight=0.0, global_results_csv='outputs/global_results.csv', init_r_cut=3.5, **kwargs):
     """Loader preparation"""
     if sub_dir is None:
@@ -165,6 +165,8 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     config.model.edge_threshold = float(edge_threshold)
     config.model.check_threshold = check_threshold
     config.model.no_edge = no_edge
+    config.model.random_pruning = random_pruning
+    config.model.random_drop_rate = float(random_drop_rate)
     config.model.action_args.num_act_graph_layers = int(action_net_glayer)
     config.model.action_args.num_act_linegraph_layers = int(action_net_lglayer)
     config.model.action_args.num_in_act_graph_layers = int(in_act_graph_layer)
@@ -474,6 +476,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--random_pruning", default='false', type=str2bool, help="random_pruning",
+    )
+
+    parser.add_argument(
+        "--random_drop_rate", default=0.5, type=float, help="random drop rate",
+    )
+
+    parser.add_argument(
         "--no_edge", default='false', type=str2bool, help="Whether to remove edges",
     )
     parser.add_argument(
@@ -539,6 +549,8 @@ if __name__ == "__main__":
         repeat = args.repeat,
         create_split = args.create_split,
         check_threshold = args.check_threshold,
+        random_pruning = args.random_pruning,
+        random_drop_rate = args.random_drop_rate,
         no_edge = args.no_edge,
         in_act_graph_layer = args.in_act_graph_layer,
         action_net = args.action_net,

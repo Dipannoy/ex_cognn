@@ -24,8 +24,8 @@ def get_atom_counts(pickle_path):
         return np.random.lognormal(mean=3.0, sigma=0.8, size=10000).astype(int)
 
 # Load your actual pickle files here
-jarvis_counts = get_atom_counts('./jarvis/jarvis_lg_cell_gap.pickle')
-mp_counts = get_atom_counts('./mp/mp_lg_unit_cell_gap.pickle')
+jarvis_counts = get_atom_counts('./jarvis/Jarvis_full_ef/jarvis_cell_ef_full.pickle')
+mp_counts = get_atom_counts('./mp/MP_full_ef/mp_l_cell_ef_full.pickle')
 
 # ---------------------------------------------------------------------------
 # 2. Plot Configuration
@@ -76,6 +76,6 @@ ax.set_axisbelow(True)
 ax.legend(loc='upper right', frameon=True, shadow=True)
 
 plt.tight_layout()
-plt.savefig('unit_cell_distribution_latest_data.pdf', format='pdf', bbox_inches='tight')
-plt.savefig('unit_cell_distribution_latest_data.png', format='png', bbox_inches='tight')
-print("Plot saved to unit_cell_distribution_latest_data.pdf and unit_cell_distribution_latest_data.png")
+plt.savefig('unit_cell_distribution_full_dataset.pdf', format='pdf', bbox_inches='tight')
+plt.savefig('unit_cell_distribution_full_dataset.png', format='png', bbox_inches='tight')
+print("Plot saved to unit_cell_distribution_full_dataset.pdf and unit_cell_distribution_full_dataset.png")

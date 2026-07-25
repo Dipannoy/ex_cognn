@@ -499,6 +499,8 @@ class CoALIGNN(nn.Module):
         self.edge_threshold = config.edge_threshold
         self.check_threshold = config.check_threshold
         self.no_edge = config.no_edge
+        self.random_pruning = config.random_pruning
+        self.random_drop_rate = config.random_drop_rate
         
         self.num_act_graph_layers = config.action_args.num_act_graph_layers
         # self.num_in_act_graph_layers = config.action_args.num_in_act_graph_layers
@@ -796,6 +798,9 @@ class CoALIGNN(nn.Module):
                     w_bonds = torch.zeros(g.num_edges(), requires_grad=False).to(x.device)
                 else:
                     w_bonds = torch.ones(g.num_edges(), requires_grad=False).to(x.device)
+                    if self.random_pruning:
+                        mask = torch.bernoulli(torch.full_like(w_bonds, 1-self.random_drop_rate)).to(x.device)
+                        w_bonds = w_bonds * mask
 
 
             x, y = gcn_layer(g, x, y, w_bonds)
