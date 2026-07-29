@@ -93,6 +93,14 @@ def extract_mad_gap(records: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     return layers, mad_gap
 
 
+def extract_mad_local_remote(records: list[dict]
+                             ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layers     = np.array([r["gn_layers"] for r in records])
+    mad_local  = np.array([r["mad"].get("mad_local",  np.nan) for r in records])
+    mad_remote = np.array([r["mad"].get("mad_remote", np.nan) for r in records])
+    return layers, mad_local, mad_remote
+
+
 def extract_sensitivity(records: list[dict], max_d: int = 6
                         ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Returns {gn_layers: (mean[1..max_d], std[1..max_d])}."""
@@ -144,6 +152,39 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
 
 
 # ---------------------------------------------------------------------------
+# Figure 1b — MAD_local vs MAD_remote (diagnostic for negative MADGap)
+# ---------------------------------------------------------------------------
+
+def plot_mad_local_remote(ax, baseline, lcsn, prop_label: str):
+    """Plot MAD_local and MAD_remote vs depth on the same axis.
+
+    MADGap = MAD_remote - MAD_local, so whenever the local curve sits
+    *above* the remote curve the gap is negative. Showing both raw curves
+    (rather than just the difference) makes it clear whether a negative
+    gap comes from local pairs becoming more dissimilar, remote pairs
+    becoming more similar, or both.
+    """
+    l, loc, rem = extract_mad_local_remote(baseline)
+    ax.plot(l, loc, color=C_BASELINE, marker=MARKER_BASELINE, linestyle="-",
+            label="Baseline — MAD$_{local}$")
+    ax.plot(l, rem, color=C_BASELINE, marker=MARKER_BASELINE, linestyle="--",
+            label="Baseline — MAD$_{remote}$")
+
+    l, loc, rem = extract_mad_local_remote(lcsn)
+    ax.plot(l, loc, color=C_COGNN, marker=MARKER_COGNN, linestyle="-",
+            label="CoGNN — MAD$_{local}$")
+    ax.plot(l, rem, color=C_COGNN, marker=MARKER_COGNN, linestyle="--",
+            label="CoGNN — MAD$_{remote}$")
+
+    ax.set_xlabel("Number of GCN layers")
+    ax.set_ylabel("MAD (mean average distance)")
+    ax.set_title(f"{prop_label} — MAD$_{{local}}$ vs MAD$_{{remote}}$\n"
+                 "(local above remote ⇒ negative MADGap)")
+    ax.set_xticks(sorted(set(list(l))))
+    ax.legend(fontsize=9, ncol=1)
+
+
+# ---------------------------------------------------------------------------
 # Figure 2 — Oversquashing (sensitivity vs distance)
 # ---------------------------------------------------------------------------
 
@@ -186,6 +227,13 @@ def plot_oversquashing(ax, baseline, lcsn, prop_label: str,
     ax.legend(ncol=2, fontsize=9)
 
 
+def _label_panels(axes, x: float = -0.14, y: float = 1.06, fontsize: int = 15):
+    """Tag each axis in row-major order with (a), (b), (c), ..."""
+    for i, ax in enumerate(np.ravel(axes)):
+        ax.text(x, y, f"({chr(ord('a') + i)})", transform=ax.transAxes,
+                fontsize=fontsize, fontweight="bold", va="bottom", ha="left")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -218,12 +266,30 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
 
         # fig1.suptitle("Oversmoothing Analysis: CoGNN vs Baseline",
         #               fontsize=14, fontweight="bold", y=1.01)
+        _label_panels(axes1)
         fig1.tight_layout()
         p1 = os.path.join(out_dir, "oversmoothing.pdf")
         fig1.savefig(p1, bbox_inches="tight", dpi=300)
         fig1.savefig(p1.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
         plt.close(fig1)
         print(f"Saved {p1}")
+
+    # ── Figure 1b: MAD_local vs MAD_remote (diagnostic) ─────────────────────
+    with matplotlib.rc_context(MANUSCRIPT_RC):
+        fig1b, axes1b = plt.subplots(1, n_props,
+                                     figsize=(6.5 * n_props, 5),
+                                     squeeze=False)
+
+        for col, (prop_label, records) in enumerate(datasets):
+            baseline, lcsn = split_by_model(records)
+            plot_mad_local_remote(axes1b[0, col], baseline, lcsn, prop_label)
+
+        fig1b.tight_layout()
+        p1b = os.path.join(out_dir, "mad_local_remote.pdf")
+        fig1b.savefig(p1b, bbox_inches="tight", dpi=300)
+        fig1b.savefig(p1b.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
+        plt.close(fig1b)
+        print(f"Saved {p1b}")
 
     # ── Figure 2: Oversquashing ────────────────────────────────────────────
     with matplotlib.rc_context(MANUSCRIPT_RC):
@@ -237,6 +303,7 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
 
         # fig2.suptitle("Oversquashing Analysis: Jacobian Sensitivity vs Distance",
         #               fontsize=14, fontweight="bold")
+        _label_panels(axes2)
         fig2.tight_layout()
         p2 = os.path.join(out_dir, "oversquashing.pdf")
         fig2.savefig(p2, bbox_inches="tight", dpi=300)
