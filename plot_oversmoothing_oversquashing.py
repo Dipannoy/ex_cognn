@@ -101,6 +101,12 @@ def extract_mad_local_remote(records: list[dict]
     return layers, mad_local, mad_remote
 
 
+def extract_mad_all(records: list[dict]) -> tuple[np.ndarray, np.ndarray]:
+    layers  = np.array([r["gn_layers"] for r in records])
+    mad_all = np.array([r["mad"].get("mad_all", np.nan) for r in records])
+    return layers, mad_all
+
+
 def extract_sensitivity(records: list[dict], max_d: int = 6
                         ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Returns {gn_layers: (mean[1..max_d], std[1..max_d])}."""
@@ -182,6 +188,33 @@ def plot_mad_local_remote(ax, baseline, lcsn, prop_label: str):
                  "(local above remote ⇒ negative MADGap)")
     ax.set_xticks(sorted(set(list(l))))
     ax.legend(fontsize=9, ncol=1)
+
+
+# ---------------------------------------------------------------------------
+# Figure 1c — MAD_all vs depth (sign-agnostic oversmoothing signal)
+# ---------------------------------------------------------------------------
+
+def plot_mad_all(ax, baseline, lcsn, prop_label: str):
+    """Plot MAD_all (all-pairs mean average distance) vs depth.
+
+    Unlike MADGap, MAD_all does not depend on which of local/remote is
+    larger — it collapses toward 0 as depth increases if and only if
+    representations are actually becoming less distinguishable overall.
+    A model that keeps MAD_all higher at a given depth is retaining more
+    representational diversity, regardless of the local/remote sign issue.
+    """
+    l, mad = extract_mad_all(baseline)
+    ax.plot(l, mad, color=C_BASELINE, marker=MARKER_BASELINE,
+            label="Baseline (dense)")
+    l, mad = extract_mad_all(lcsn)
+    ax.plot(l, mad, color=C_COGNN, marker=MARKER_COGNN,
+            label="CoGNN (pruned)")
+
+    ax.set_xlabel("Number of GCN layers")
+    ax.set_ylabel("MAD$_{all}$ (mean average distance)")
+    ax.set_title(f"{prop_label} — MAD$_{{all}}$ vs depth  (↑ = less oversmoothed)")
+    ax.set_xticks(sorted(set(list(l))))
+    ax.legend(fontsize=9)
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +323,24 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
         fig1b.savefig(p1b.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
         plt.close(fig1b)
         print(f"Saved {p1b}")
+
+    # ── Figure 1c: MAD_all vs depth (sign-agnostic oversmoothing signal) ────
+    with matplotlib.rc_context(MANUSCRIPT_RC):
+        fig1c, axes1c = plt.subplots(1, n_props,
+                                     figsize=(6.5 * n_props, 5),
+                                     squeeze=False)
+
+        for col, (prop_label, records) in enumerate(datasets):
+            baseline, lcsn = split_by_model(records)
+            plot_mad_all(axes1c[0, col], baseline, lcsn, prop_label)
+
+        _label_panels(axes1c)
+        fig1c.tight_layout()
+        p1c = os.path.join(out_dir, "mad_all.pdf")
+        fig1c.savefig(p1c, bbox_inches="tight", dpi=300)
+        fig1c.savefig(p1c.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
+        plt.close(fig1c)
+        print(f"Saved {p1c}")
 
     # ── Figure 2: Oversquashing ────────────────────────────────────────────
     with matplotlib.rc_context(MANUSCRIPT_RC):
