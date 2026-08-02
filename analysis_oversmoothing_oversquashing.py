@@ -199,8 +199,22 @@ def build_config_from_dir(exp_path: str, args) -> object:
 
 def _agg_mad(fold_mad_list):
     keys = ["mad_all", "mad_local", "mad_remote", "mad_gap"]
-    return {k: float(np.mean([d[k] for d in fold_mad_list if not np.isnan(d[k])]))
-            for k in keys}
+    out = {}
+    for k in keys:
+        vals = [d[k] for d in fold_mad_list if not np.isnan(d[k])]
+        out[k] = float(np.mean(vals)) if vals else float("nan")
+        out[f"{k}_std"] = float(np.std(vals)) if vals else float("nan")
+    return out
+
+
+def _agg_rank(fold_rank_list):
+    keys = ["numerical_rank", "effective_rank"]
+    out = {}
+    for k in keys:
+        vals = [d[k] for d in fold_rank_list if not np.isnan(d[k])]
+        out[k] = float(np.mean(vals)) if vals else float("nan")
+        out[f"{k}_std"] = float(np.std(vals)) if vals else float("nan")
+    return out
 
 
 def _agg_sens(fold_sens_list):
@@ -221,7 +235,7 @@ def _analyse_one(exp: dict, args) -> dict:
     cfg    = build_config_from_dir(exp["path"], args)
     runner = AnalysisRunner(config=cfg, verbose=False)
 
-    fold_mae, fold_mad, fold_sens = [], [], []
+    fold_mae, fold_mad, fold_rank, fold_sens = [], [], [], []
 
     for fold in range(args.n_folds):
         try:
@@ -257,6 +271,15 @@ def _analyse_one(exp: dict, args) -> dict:
               f"MADGap={mad_dict['mad_gap']:.4f}  ({time.time()-t0:.1f} s)")
         fold_mad.append(mad_dict)
 
+        # Rank-based oversmoothing metrics (NumRank / Erank) — Zhang et al.
+        # 2026 ICLR, "Are We Measuring Oversmoothing in GNNs Correctly?"
+        t0 = time.time()
+        rank_dict = runner.compute_rank_metrics(test_loader,
+                                                 max_structures=args.max_mad_structures)
+        print(f"  [fold {fold}] NumRank={rank_dict['numerical_rank']:.3f}  "
+              f"Erank={rank_dict['effective_rank']:.3f}  ({time.time()-t0:.1f} s)")
+        fold_rank.append(rank_dict)
+
         # Jacobian sensitivity (oversquashing)
         t0 = time.time()
         sens_dict = runner.compute_jacobian_sensitivity(
@@ -275,6 +298,7 @@ def _analyse_one(exp: dict, args) -> dict:
         "test_mae":     float(np.mean(fold_mae))   if fold_mae  else None,
         "test_mae_std": float(np.std(fold_mae))    if fold_mae  else None,
         "mad":          _agg_mad(fold_mad)          if fold_mad  else {},
+        "rank":         _agg_rank(fold_rank)        if fold_rank else {},
         "sensitivity":  _agg_sens(fold_sens)        if fold_sens else {},
     }
     print(f"  → test MAE = {rec['test_mae']}")
@@ -298,9 +322,17 @@ def _save_results(results: list, output_json: str):
             "test_mae":     r.get("test_mae"),
             "test_mae_std": r.get("test_mae_std"),
             "mad_all":      r["mad"].get("mad_all"),
+            "mad_all_std":  r["mad"].get("mad_all_std"),
             "mad_local":    r["mad"].get("mad_local"),
+            "mad_local_std":  r["mad"].get("mad_local_std"),
             "mad_remote":   r["mad"].get("mad_remote"),
+            "mad_remote_std": r["mad"].get("mad_remote_std"),
             "mad_gap":      r["mad"].get("mad_gap"),
+            "mad_gap_std":  r["mad"].get("mad_gap_std"),
+            "numerical_rank":     r.get("rank", {}).get("numerical_rank"),
+            "numerical_rank_std": r.get("rank", {}).get("numerical_rank_std"),
+            "effective_rank":     r.get("rank", {}).get("effective_rank"),
+            "effective_rank_std": r.get("rank", {}).get("effective_rank_std"),
             "sens_d1":      r["sensitivity"].get("mean", [None]*2)[1] if r.get("sensitivity") else None,
             "sens_d2":      r["sensitivity"].get("mean", [None]*3)[2] if r.get("sensitivity") else None,
         })

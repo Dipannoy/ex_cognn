@@ -203,8 +203,6 @@ def regenerate_png_from_json(exp: dict) -> str | None:
             y=threshold, color=C_THRESH, linestyle="--",
             linewidth=2.0, label=f"threshold = {threshold}",
         )
-        axes[0].set_xlabel("Bond Length (Å)")
-        axes[0].set_ylabel("Edge Weight")
         axes[0].legend(loc="upper right")
 
         # ---- Histogram: kept vs dropped ----
@@ -218,8 +216,6 @@ def regenerate_png_from_json(exp: dict) -> str | None:
             label=f"Dropped ({(~kept_mask).sum():,})",
             color=C_DROPPED, edgecolor="white", linewidth=0.3,
         )
-        axes[1].set_xlabel("Bond Length (Å)")
-        axes[1].set_ylabel("Density")
         axes[1].legend(loc="upper right")
 
         plt.tight_layout()
@@ -306,7 +302,13 @@ def load_and_split(path: str) -> tuple[np.ndarray, np.ndarray]:
             return half
         return half[:, max(cols[0] - 2, 0):min(cols[-1] + 2, half.shape[1]), :]
 
-    return trim_h(left), trim_h(right)
+    def pad_top(half: np.ndarray, frac: float = 0.07) -> np.ndarray:
+        """Add a blank white margin above the plot for the panel letter to sit in."""
+        pad_px = max(24, int(round(half.shape[0] * frac)))
+        pad    = np.full((pad_px, half.shape[1], 3), 255, dtype=half.dtype)
+        return np.vstack([pad, half])
+
+    return pad_top(trim_h(left)), pad_top(trim_h(right))
 
 
 # ---------------------------------------------------------------------------
@@ -324,13 +326,15 @@ FIG_H  = 10.5
 fig = plt.figure(figsize=(FIG_W, FIG_H))
 
 # Outer gridspec: one row per experiment, with room for group labels on right
+# and shared x-/y-axis labels (left margin widened for the merged y-axis
+# label; bottom margin widened for the merged x-axis label).
 outer = gridspec.GridSpec(
     N_ROWS, 1,
     figure=fig,
     hspace=0.10,
     top=0.95,
-    bottom=0.03,
-    left=0.10,
+    bottom=0.07,
+    left=0.17,
     right=0.93,
 )
 
@@ -364,17 +368,16 @@ for row_idx, exp in enumerate(EXPERIMENTS):
         # Panel letter (a)–(h) in top-left corner
         letter = PANEL_LETTERS[row_idx * N_COLS + col_idx]
         ax.text(
-            0.015, 0.962, f"({letter})",
+            0.015, 0.967, f"({letter})",
             transform=ax.transAxes,
             fontsize=13, fontweight="bold",
-            va="top", ha="left",
+            va="center", ha="left",
             color="black",
-            bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="none", alpha=0.80),
         )
 
     # Row label on the left  (dataset name + θ)
     axes[row_idx][0].text(
-        -0.015, 0.5,
+        -0.06, 0.5,
         exp["row_label"] + f"\n{exp['theta']}",
         transform=axes[row_idx][0].transAxes,
         fontsize=12, fontweight="bold",
@@ -416,6 +419,49 @@ for y_g, label_g in [(y_jarvis, "JARVIS"), (y_mp, "Materials Project")]:
         rotation=90,
         color="#222222",
     )
+
+# ---------------------------------------------------------------------------
+# Shared axis labels (replace the per-panel labels stripped from the
+# individual PNGs): one x-axis label for the whole figure, and one y-axis
+# label per column, each spanning all four rows.
+# ---------------------------------------------------------------------------
+bb_top    = axes[0][0].get_position()
+bb_bottom = axes[N_ROWS - 1][0].get_position()
+y_center  = (bb_top.y1 + bb_bottom.y0) / 2.0
+
+x_center = (0.17 + 0.93) / 2.0
+fig.text(
+    x_center, 0.015, "Bond Length (Å)",
+    transform=fig.transFigure,
+    fontsize=14, fontweight="bold",
+    va="bottom", ha="center",
+)
+
+label_bbox = dict(boxstyle="square,pad=0.25", fc="white", ec="none")
+
+x_col0_label = 0.045
+fig.text(
+    x_col0_label, y_center, "Edge Weight",
+    transform=fig.transFigure,
+    fontsize=13, fontweight="bold",
+    va="center", ha="center",
+    rotation=90,
+    bbox=label_bbox,
+    zorder=5,
+)
+
+bb_col0 = axes[0][0].get_position()
+bb_col1 = axes[0][1].get_position()
+x_gutter = (bb_col0.x1 + bb_col1.x0) / 2.0
+fig.text(
+    x_gutter, y_center, "Density",
+    transform=fig.transFigure,
+    fontsize=13, fontweight="bold",
+    va="center", ha="center",
+    rotation=90,
+    bbox=label_bbox,
+    zorder=5,
+)
 
 # ---------------------------------------------------------------------------
 # Save

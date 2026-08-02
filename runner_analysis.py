@@ -105,6 +105,64 @@ def aggregate_mad(mad_list: list[dict]) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Rank-based oversmoothing metrics
+#
+# Zhang, Deidda, Higham & Tudisco, "Are We Measuring Oversmoothing in Graph
+# Neural Networks Correctly?" (ICLR 2026) argue that Dirichlet/MAD-like
+# energy metrics only signal oversmoothing once they converge exactly to
+# zero, which in practice requires very deep, weight-bounded networks —
+# realistic shallow-to-moderate-depth models can suffer clear performance
+# degradation with no visible change in MAD. They propose measuring the
+# (continuous relaxation of the) rank of the feature matrix instead, since
+# it is scale-invariant and detects convergence toward *any* low-rank
+# subspace, not just exact alignment with a fixed dominant eigenvector.
+#
+#   NumRank(X) = ||X||_F^2 / ||X||_2^2     (numerical rank)
+#   Erank(X)   = exp(-sum_k p_k log p_k),  p_k = sigma_k / sum(sigma)
+#                                            (Shannon / effective rank)
+#
+# Both equal 1 exactly at rank-1 collapse and grow toward min(N, H) as the
+# embedding matrix retains more independent directions of variation, so a
+# decreasing trend with depth is the oversmoothing signal (analogous to a
+# shrinking MADGap, but without requiring exact convergence to detect it).
+# ---------------------------------------------------------------------------
+
+def compute_rank_metrics_for_structure(embeddings: np.ndarray) -> dict:
+    """NumRank and Erank of one crystal's final-layer node embedding matrix."""
+    N = embeddings.shape[0]
+    if N < 2:
+        return None
+
+    sigma = np.linalg.svd(embeddings, compute_uv=False)
+    sigma = sigma[sigma > 1e-12]
+    if len(sigma) == 0:
+        return None
+
+    num_rank = float(np.sum(sigma ** 2) / sigma[0] ** 2)
+
+    p = sigma / sigma.sum()
+    eff_rank = float(np.exp(-np.sum(p * np.log(p))))
+
+    return {"numerical_rank": num_rank, "effective_rank": eff_rank, "n_nodes": N}
+
+
+def aggregate_rank_metrics(rank_list: list[dict]) -> dict:
+    """Weighted mean (by n_nodes) over per-structure rank-metric dicts."""
+    keys = ["numerical_rank", "effective_rank"]
+    totals = defaultdict(float)
+    weights = defaultdict(float)
+    for d in rank_list:
+        if d is None:
+            continue
+        w = d["n_nodes"]
+        for k in keys:
+            totals[k]  += d[k] * w
+            weights[k] += w
+    return {k: (totals[k] / weights[k] if weights[k] > 0 else np.nan)
+            for k in keys}
+
+
+# ---------------------------------------------------------------------------
 # Jacobian sensitivity helpers
 # ---------------------------------------------------------------------------
 
@@ -149,6 +207,31 @@ class AnalysisRunner(Runner):
                 break
 
         return aggregate_mad(mad_list)
+
+    # ------------------------------------------------------------- Rank --
+
+    def compute_rank_metrics(self, loader, max_structures: int = None) -> dict:
+        """Compute NumRank / Erank across test structures (Zhang et al. 2026).
+
+        Parameters
+        ----------
+        loader        : DataLoader (test split)
+        max_structures: stop after this many crystals (None = all)
+
+        Returns
+        -------
+        dict with keys: numerical_rank, effective_rank
+        """
+        embeddings_by_jid = self.extract_node_embeddings(loader)
+
+        rank_list = []
+        for jid, info in embeddings_by_jid.items():
+            r = compute_rank_metrics_for_structure(info["embeddings"])
+            rank_list.append(r)
+            if max_structures and len(rank_list) >= max_structures:
+                break
+
+        return aggregate_rank_metrics(rank_list)
 
     # -------------------------------------------------------- Jacobian sens. --
 

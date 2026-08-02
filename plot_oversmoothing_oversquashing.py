@@ -101,10 +101,22 @@ def extract_mad_local_remote(records: list[dict]
     return layers, mad_local, mad_remote
 
 
-def extract_mad_all(records: list[dict]) -> tuple[np.ndarray, np.ndarray]:
-    layers  = np.array([r["gn_layers"] for r in records])
-    mad_all = np.array([r["mad"].get("mad_all", np.nan) for r in records])
-    return layers, mad_all
+def extract_mad_all(records: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layers      = np.array([r["gn_layers"] for r in records])
+    mad_all     = np.array([r["mad"].get("mad_all", np.nan) for r in records])
+    mad_all_std = np.array([r["mad"].get("mad_all_std", np.nan) for r in records])
+    return layers, mad_all, mad_all_std
+
+
+def extract_rank_metrics(records: list[dict]
+                         ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Numerical rank / effective rank vs depth (Zhang et al. 2026, ICLR)."""
+    layers      = np.array([r["gn_layers"] for r in records])
+    num_rank    = np.array([r.get("rank", {}).get("numerical_rank", np.nan) for r in records])
+    num_rank_sd = np.array([r.get("rank", {}).get("numerical_rank_std", np.nan) for r in records])
+    eff_rank    = np.array([r.get("rank", {}).get("effective_rank", np.nan) for r in records])
+    eff_rank_sd = np.array([r.get("rank", {}).get("effective_rank_std", np.nan) for r in records])
+    return layers, num_rank, num_rank_sd, eff_rank, eff_rank_sd
 
 
 def extract_sensitivity(records: list[dict], max_d: int = 6
@@ -203,18 +215,64 @@ def plot_mad_all(ax, baseline, lcsn, prop_label: str):
     A model that keeps MAD_all higher at a given depth is retaining more
     representational diversity, regardless of the local/remote sign issue.
     """
-    l, mad = extract_mad_all(baseline)
-    ax.plot(l, mad, color=C_BASELINE, marker=MARKER_BASELINE,
-            label="Baseline (dense)")
-    l, mad = extract_mad_all(lcsn)
-    ax.plot(l, mad, color=C_COGNN, marker=MARKER_COGNN,
-            label="CoGNN (pruned)")
+    l, mad, mad_std = extract_mad_all(baseline)
+    ax.errorbar(l, mad, yerr=mad_std if not np.all(np.isnan(mad_std)) else None,
+                color=C_BASELINE, marker=MARKER_BASELINE, label="Baseline (dense)",
+                capsize=4, capthick=1.5)
+    l, mad, mad_std = extract_mad_all(lcsn)
+    ax.errorbar(l, mad, yerr=mad_std if not np.all(np.isnan(mad_std)) else None,
+                color=C_COGNN, marker=MARKER_COGNN, label="CoGNN (pruned)",
+                capsize=4, capthick=1.5)
 
     ax.set_xlabel("Number of GCN layers")
     ax.set_ylabel("MAD$_{all}$ (mean average distance)")
     ax.set_title(f"{prop_label} — MAD$_{{all}}$ vs depth  (↑ = less oversmoothed)")
     ax.set_xticks(sorted(set(list(l))))
     ax.legend(fontsize=9)
+
+
+# ---------------------------------------------------------------------------
+# Figure 1d — Rank-based oversmoothing metrics (NumRank & Erank)
+#
+# Zhang, Deidda, Higham & Tudisco (ICLR 2026) show that MAD/Dirichlet-like
+# metrics only signal oversmoothing once they converge exactly to zero,
+# which requires very deep, weight-bounded networks — realistic shallow
+# GNNs can already suffer performance degradation with no visible MAD
+# decay. They propose the numerical rank and effective (Shannon) rank of
+# the feature matrix instead, since these are scale-invariant and detect
+# convergence toward any low-rank subspace, not just an exact eigenvector
+# alignment. Both metrics equal 1 at full rank-1 collapse, so a decreasing
+# trend with depth is the oversmoothing signal here (same reading direction
+# as MAD_all: higher = less oversmoothed).
+# ---------------------------------------------------------------------------
+
+def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
+    """Fill two axes: left=NumRank vs depth, right=Erank vs depth."""
+
+    def _plot(ax, layers, vals, vals_std, color, marker, label):
+        ax.errorbar(layers, vals, yerr=vals_std if not np.all(np.isnan(vals_std)) else None,
+                    color=color, marker=marker, label=label,
+                    capsize=4, capthick=1.5)
+
+    l, num, num_sd, _, _ = extract_rank_metrics(baseline)
+    _plot(ax_num, l, num, num_sd, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
+    l, num, num_sd, _, _ = extract_rank_metrics(lcsn)
+    _plot(ax_num, l, num, num_sd, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
+    ax_num.set_xlabel("Number of GCN layers")
+    ax_num.set_ylabel("Numerical Rank")
+    ax_num.set_title(f"{prop_label} — Numerical Rank vs depth  (↑ = less oversmoothed)")
+    ax_num.set_xticks(sorted(set(list(l))))
+    ax_num.legend(fontsize=9)
+
+    l, _, _, erk, erk_sd = extract_rank_metrics(baseline)
+    _plot(ax_erank, l, erk, erk_sd, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
+    l, _, _, erk, erk_sd = extract_rank_metrics(lcsn)
+    _plot(ax_erank, l, erk, erk_sd, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
+    ax_erank.set_xlabel("Number of GCN layers")
+    ax_erank.set_ylabel("Effective Rank")
+    ax_erank.set_title(f"{prop_label} — Effective Rank vs depth  (↑ = less oversmoothed)")
+    ax_erank.set_xticks(sorted(set(list(l))))
+    ax_erank.legend(fontsize=9)
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +399,25 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
         fig1c.savefig(p1c.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
         plt.close(fig1c)
         print(f"Saved {p1c}")
+
+    # ── Figure 1d: Rank-based oversmoothing metrics (NumRank & Erank) ───────
+    with matplotlib.rc_context(MANUSCRIPT_RC):
+        fig1d, axes1d = plt.subplots(n_props, 2,
+                                     figsize=(12, 4.5 * n_props),
+                                     squeeze=False)
+
+        for row, (prop_label, records) in enumerate(datasets):
+            baseline, lcsn = split_by_model(records)
+            plot_rank_metrics(axes1d[row, 0], axes1d[row, 1],
+                              baseline, lcsn, prop_label)
+
+        _label_panels(axes1d)
+        fig1d.tight_layout()
+        p1d = os.path.join(out_dir, "rank_metrics.pdf")
+        fig1d.savefig(p1d, bbox_inches="tight", dpi=300)
+        fig1d.savefig(p1d.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
+        plt.close(fig1d)
+        print(f"Saved {p1d}")
 
     # ── Figure 2: Oversquashing ────────────────────────────────────────────
     with matplotlib.rc_context(MANUSCRIPT_RC):
