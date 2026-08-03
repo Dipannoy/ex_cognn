@@ -174,6 +174,13 @@ def build_config_from_dir(exp_path: str, args) -> object:
     cfg.model.gcn_layers                           = gcn_layers
     cfg.model.edge_threshold                       = edge_threshold
     cfg.model.check_threshold                      = (model_type == "lcsn")
+    # Read directly by Alignn.__init__ (models/alignn.py) — not present in the
+    # base config JSON, and only ever set at train time by main.py. Without
+    # these, building the model here raises a missing-key error on
+    # config.no_edge / config.random_pruning / config.random_drop_rate.
+    cfg.model.no_edge                              = False
+    cfg.model.random_pruning                       = False
+    cfg.model.random_drop_rate                     = 0.5
     cfg.model.action_args.num_act_graph_layers     = 1 if model_type == "lcsn" else 0
     cfg.model.action_args.num_act_linegraph_layers = 0
     cfg.model.action_args.num_in_act_graph_layers  = 1
