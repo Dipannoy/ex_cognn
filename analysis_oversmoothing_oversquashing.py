@@ -242,7 +242,23 @@ def _analyse_one(exp: dict, args) -> dict:
     cfg    = build_config_from_dir(exp["path"], args)
     runner = AnalysisRunner(config=cfg, verbose=False)
 
-    fold_mae, fold_mad, fold_rank, fold_sens = [], [], [], []
+    # error.csv is written ONCE by main.py after all folds finish training
+    # (main.py:281-288), and its "test" row's mean/std are already computed
+    # correctly across the real per-fold test_arr. Read it once here rather
+    # than re-reading this same static file inside the per-fold loop below —
+    # doing that previously appended N copies of the identical aggregate
+    # mean to a list and then took std() of those duplicates, which is
+    # always exactly 0 regardless of the real fold-to-fold variance.
+    test_mae, test_mae_std = None, None
+    error_csv = os.path.join(exp["path"], "error.csv")
+    if os.path.exists(error_csv):
+        df_err   = pd.read_csv(error_csv)
+        test_row = df_err[df_err["sample"] == "test"]
+        if not test_row.empty:
+            test_mae     = float(test_row["mean"].values[0])
+            test_mae_std = float(test_row["std"].values[0])
+
+    fold_mad, fold_rank, fold_sens = [], [], []
 
     for fold in range(args.n_folds):
         try:
@@ -261,14 +277,6 @@ def _analyse_one(exp: dict, args) -> dict:
             trim_graph_dir = None,
         )
         test_loader = loaders[2]   # train, val, test
-
-        # MAE from saved error.csv
-        error_csv = os.path.join(exp["path"], "error.csv")
-        if os.path.exists(error_csv):
-            df_err   = pd.read_csv(error_csv)
-            test_row = df_err[df_err["sample"] == "test"]
-            if not test_row.empty:
-                fold_mae.append(float(test_row["mean"].values[0]))
 
         # MAD (oversmoothing)
         t0 = time.time()
@@ -302,8 +310,8 @@ def _analyse_one(exp: dict, args) -> dict:
         "name":         exp["name"],
         "model":        exp["model"],
         "gn_layers":    exp["gn_layers"],
-        "test_mae":     float(np.mean(fold_mae))   if fold_mae  else None,
-        "test_mae_std": float(np.std(fold_mae))    if fold_mae  else None,
+        "test_mae":     test_mae,
+        "test_mae_std": test_mae_std,
         "mad":          _agg_mad(fold_mad)          if fold_mad  else {},
         "rank":         _agg_rank(fold_rank)        if fold_rank else {},
         "sensitivity":  _agg_sens(fold_sens)        if fold_sens else {},
@@ -345,6 +353,26 @@ def _save_results(results: list, output_json: str):
         })
     pd.DataFrame(rows).to_csv(csv_path, index=False)
     print(f"CSV saved to {csv_path}")
+
+
+def _read_test_mae_stats(exp_path: str) -> tuple:
+    """Read the cross-fold test MAE mean/std straight from error.csv.
+
+    error.csv is written once by main.py after all folds finish training
+    (main.py:281-288), and its "test" row's mean/std are already computed
+    correctly from the real per-fold test_arr. Used to patch shards whose
+    test_mae_std was computed incorrectly by an earlier version of
+    _analyse_one (which re-read this same static file inside the per-fold
+    loop and took std() of N copies of the same aggregate mean -- always 0).
+    """
+    error_csv = os.path.join(exp_path, "error.csv")
+    if not os.path.exists(error_csv):
+        return None, None
+    df_err   = pd.read_csv(error_csv)
+    test_row = df_err[df_err["sample"] == "test"]
+    if test_row.empty:
+        return None, None
+    return float(test_row["mean"].values[0]), float(test_row["std"].values[0])
 
 
 def run_analysis(args):
@@ -398,8 +426,20 @@ def run_analysis(args):
         print(shard_path)
         if os.path.exists(shard_path):
             with open(shard_path) as f:
-                results.extend(json.load(f))
-            print(f"  Loaded shard: {os.path.basename(shard_path)}")
+                shard_recs = json.load(f)
+
+            # Patch test_mae / test_mae_std from error.csv directly at
+            # aggregation time -- MAD/rank/sensitivity in the shard are
+            # already correct (and expensive to recompute), only the MAE
+            # std was wrong, and its fix is a cheap CSV read, not a rerun.
+            mae, mae_std = _read_test_mae_stats(exp["path"])
+            for rec in shard_recs:
+                rec["test_mae"]     = mae
+                rec["test_mae_std"] = mae_std
+
+            results.extend(shard_recs)
+            print(f"  Loaded shard: {os.path.basename(shard_path)}  "
+                  f"(test_mae={mae}, test_mae_std={mae_std})")
         else:
             print(f"  WARNING: no shard for {exp['name']} — skipping "
                   f"(run its SLURM job first).")

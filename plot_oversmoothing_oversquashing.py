@@ -31,6 +31,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import LinearSegmentedColormap, to_hex
 
 # ---------------------------------------------------------------------------
 # Style
@@ -302,8 +303,9 @@ def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
 # ---------------------------------------------------------------------------
 # Figure 1e — MAE panel | Rank panel (NumRank + Erank on a twin axis), side
 # by side, one row per property. Real units throughout — no normalization.
-# No titles: figure captions belong in the manuscript LaTeX, not baked into
-# the image.
+# Each panel carries a short, generic caption ("MAE vs GCN layers" /
+# "Rank vs GCN layers"); the property name itself lives in the MAE panel's
+# y-axis label so it isn't repeated in both captions.
 # ---------------------------------------------------------------------------
 
 def _lighten(hex_color: str, factor: float = 0.55) -> str:
@@ -329,7 +331,7 @@ _RANK_SERIES_STYLE = {
 
 
 def plot_mae_panel(ax, baseline, lcsn, prop_label: str):
-    """MAE vs depth, real units, with error bars. No title."""
+    """MAE vs depth, real units, with error bars."""
 
     def _plot(layers, vals, vals_std, color, marker, label):
         has_err = not np.all(np.isnan(vals_std))
@@ -344,12 +346,13 @@ def plot_mae_panel(ax, baseline, lcsn, prop_label: str):
     _plot(l, m, ms, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
     ax.set_xlabel("Number of GCN layers")
     ax.set_ylabel(f"{prop_label} — Test MAE (eV)")
+    ax.set_title("MAE vs GCN layers")
     ax.set_xticks(sorted(set(l.tolist())))
     ax.legend(fontsize=9)
 
 
 def plot_rank_panel(ax, baseline, lcsn, prop_label: str):
-    """NumRank (left axis) + Erank (right axis) vs depth, real units. No title."""
+    """NumRank (left axis) + Erank (right axis) vs depth, real units."""
     ax_num = ax
     ax_erk = ax.twinx()
 
@@ -374,6 +377,7 @@ def plot_rank_panel(ax, baseline, lcsn, prop_label: str):
     ax_num.set_xlabel("Number of GCN layers")
     ax_num.set_ylabel("Numerical Rank")
     ax_erk.set_ylabel("Effective Rank")
+    ax_num.set_title("Rank vs GCN layers")
     ax_num.set_xticks(sorted(set(l_b.tolist()) | set(l_c.tolist())))
 
     h1, lab1 = ax_num.get_legend_handles_labels()
@@ -384,6 +388,17 @@ def plot_rank_panel(ax, baseline, lcsn, prop_label: str):
 # ---------------------------------------------------------------------------
 # Figure 2 — Oversquashing (sensitivity vs distance)
 # ---------------------------------------------------------------------------
+
+# Custom-anchored colormaps for depth shading -- built from hand-picked,
+# well-saturated endpoints rather than matplotlib's stock "Blues"/"Oranges"
+# (which are washed out at low sample fractions and read poorly in print).
+# Light -> dark still maps to shallow -> deep network, within each model's
+# hue family.
+_OVERSQ_BASE_CMAP  = LinearSegmentedColormap.from_list(
+    "oversq_base",  ["#8FCBEB", "#0072B2", "#00263D"])
+_OVERSQ_COGNN_CMAP = LinearSegmentedColormap.from_list(
+    "oversq_cognn", ["#FBCB8B", "#E69F00", "#7F2704"])
+
 
 def plot_oversquashing(ax, baseline, lcsn, prop_label: str,
                        selected_layers: list[int] = None, max_d: int = 6):
@@ -399,29 +414,34 @@ def plot_oversquashing(ax, baseline, lcsn, prop_label: str,
     sens_base = extract_sensitivity(baseline, max_d)
     sens_lcsn = extract_sensitivity(lcsn, max_d)
 
-    # Depth is now encoded by color shade (not linestyle): each selected
-    # depth gets its own color, drawn from a "Blues" ramp for baseline and
-    # an "Oranges" ramp for CoGNN, so model identity (hue family) and depth
-    # (shade) are both visible without relying on dashed/dotted lines.
+    # Depth is encoded by color shade (not linestyle): each selected depth
+    # gets its own color from the custom colormaps above. Error bars (not
+    # translucent fill_between bands, which muddy together wherever a
+    # baseline and CoGNN band overlap) match the style used in every other
+    # panel in this file.
     n = max(len(selected_layers), 1)
-    shades = np.linspace(0.4, 0.95, n)
-    base_colors  = [plt.get_cmap("Blues")(s)   for s in shades]
-    cognn_colors = [plt.get_cmap("Oranges")(s) for s in shades]
+    shades = np.linspace(0.12, 0.95, n)
+    base_colors  = [to_hex(_OVERSQ_BASE_CMAP(s))  for s in shades]
+    cognn_colors = [to_hex(_OVERSQ_COGNN_CMAP(s)) for s in shades]
 
     for i, n_layers in enumerate(selected_layers):
         if n_layers in sens_base:
             m, s = sens_base[n_layers]
-            ax.plot(distances, m, color=base_colors[i],
-                    marker=MARKER_BASELINE,
-                    label=f"Baseline gn={n_layers}")
-            ax.fill_between(distances, m - s, m + s, color=base_colors[i], alpha=0.15)
+            has_err = np.any(s > 0)
+            ax.errorbar(distances, m, yerr=s if has_err else None,
+                        color=base_colors[i], marker=MARKER_BASELINE,
+                        ecolor=_lighten(base_colors[i]) if has_err else base_colors[i],
+                        elinewidth=1.1, capsize=3, capthick=1.1,
+                        label=f"Baseline gn={n_layers}")
 
         if n_layers in sens_lcsn:
             m, s = sens_lcsn[n_layers]
-            ax.plot(distances, m, color=cognn_colors[i],
-                    marker=MARKER_COGNN,
-                    label=f"CoGNN gn={n_layers}")
-            ax.fill_between(distances, m - s, m + s, color=cognn_colors[i], alpha=0.15)
+            has_err = np.any(s > 0)
+            ax.errorbar(distances, m, yerr=s if has_err else None,
+                        color=cognn_colors[i], marker=MARKER_COGNN,
+                        ecolor=_lighten(cognn_colors[i]) if has_err else cognn_colors[i],
+                        elinewidth=1.1, capsize=3, capthick=1.1,
+                        label=f"CoGNN gn={n_layers}")
 
     ax.set_yscale("log")
     ax.set_xlabel("Graph distance $d(i, j)$")
