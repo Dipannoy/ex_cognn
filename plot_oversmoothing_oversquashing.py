@@ -87,18 +87,21 @@ def extract_mae(records: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndarray
     return layers, mae, mae_std
 
 
-def extract_mad_gap(records: list[dict]) -> tuple[np.ndarray, np.ndarray]:
-    layers  = np.array([r["gn_layers"] for r in records])
-    mad_gap = np.array([r["mad"].get("mad_gap", np.nan) for r in records])
-    return layers, mad_gap
+def extract_mad_gap(records: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layers      = np.array([r["gn_layers"] for r in records])
+    mad_gap     = np.array([r["mad"].get("mad_gap", np.nan) for r in records])
+    mad_gap_std = np.array([r["mad"].get("mad_gap_std", np.nan) for r in records])
+    return layers, mad_gap, mad_gap_std
 
 
 def extract_mad_local_remote(records: list[dict]
-                             ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    layers     = np.array([r["gn_layers"] for r in records])
-    mad_local  = np.array([r["mad"].get("mad_local",  np.nan) for r in records])
-    mad_remote = np.array([r["mad"].get("mad_remote", np.nan) for r in records])
-    return layers, mad_local, mad_remote
+                             ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    layers         = np.array([r["gn_layers"] for r in records])
+    mad_local      = np.array([r["mad"].get("mad_local",  np.nan) for r in records])
+    mad_local_std  = np.array([r["mad"].get("mad_local_std",  np.nan) for r in records])
+    mad_remote     = np.array([r["mad"].get("mad_remote", np.nan) for r in records])
+    mad_remote_std = np.array([r["mad"].get("mad_remote_std", np.nan) for r in records])
+    return layers, mad_local, mad_local_std, mad_remote, mad_remote_std
 
 
 def extract_mad_all(records: list[dict]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -139,9 +142,11 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
     """Fill two axes: left=MAE vs layers, right=MADGap vs layers."""
 
     def _plot(ax, layers, vals, vals_std, color, marker, label):
-        ax.errorbar(layers, vals, yerr=vals_std if not np.all(np.isnan(vals_std)) else None,
+        has_err = not np.all(np.isnan(vals_std))
+        ax.errorbar(layers, vals, yerr=vals_std if has_err else None,
                     color=color, marker=marker, label=label,
-                    capsize=4, capthick=1.5)
+                    ecolor=_lighten(color) if has_err else color,
+                    elinewidth=1.2, capsize=4, capthick=1.2)
 
     # MAE
     l, m, ms = extract_mae(baseline)
@@ -155,12 +160,10 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
     ax_mae.set_xticks(sorted(set(list(extract_mae(baseline)[0]) + list(extract_mae(lcsn)[0]))))
 
     # MADGap
-    l, mg = extract_mad_gap(baseline)
-    ax_mad.plot(l, mg, color=C_BASELINE, marker=MARKER_BASELINE,
-                label="Baseline (dense)")
-    l, mg = extract_mad_gap(lcsn)
-    ax_mad.plot(l, mg, color=C_COGNN, marker=MARKER_COGNN,
-                label="CoGNN (pruned)")
+    l, mg, mg_std = extract_mad_gap(baseline)
+    _plot(ax_mad, l, mg, mg_std, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
+    l, mg, mg_std = extract_mad_gap(lcsn)
+    _plot(ax_mad, l, mg, mg_std, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
     ax_mad.axhline(0, color="grey", linestyle="--", linewidth=1, alpha=0.7)
     ax_mad.set_xlabel("Number of GCN layers")
     ax_mad.set_ylabel("MADGap")
@@ -173,6 +176,14 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
 # Figure 1b — MAD_local vs MAD_remote (diagnostic for negative MADGap)
 # ---------------------------------------------------------------------------
 
+_MAD_LOCAL_REMOTE_STYLE = {
+    ("baseline", "local"):  dict(color="#0072B2", marker="o"),   # blue
+    ("baseline", "remote"): dict(color="#56B4E9", marker="o"),   # sky blue
+    ("cognn",    "local"):  dict(color="#E69F00", marker="s"),   # orange
+    ("cognn",    "remote"): dict(color="#D55E00", marker="s"),   # vermillion
+}
+
+
 def plot_mad_local_remote(ax, baseline, lcsn, prop_label: str):
     """Plot MAD_local and MAD_remote vs depth on the same axis.
 
@@ -180,19 +191,26 @@ def plot_mad_local_remote(ax, baseline, lcsn, prop_label: str):
     *above* the remote curve the gap is negative. Showing both raw curves
     (rather than just the difference) makes it clear whether a negative
     gap comes from local pairs becoming more dissimilar, remote pairs
-    becoming more similar, or both.
+    becoming more similar, or both. Local/remote is now encoded by color
+    (not linestyle) — four distinct colors, one per (model, local/remote).
     """
-    l, loc, rem = extract_mad_local_remote(baseline)
-    ax.plot(l, loc, color=C_BASELINE, marker=MARKER_BASELINE, linestyle="-",
-            label="Baseline — MAD$_{local}$")
-    ax.plot(l, rem, color=C_BASELINE, marker=MARKER_BASELINE, linestyle="--",
-            label="Baseline — MAD$_{remote}$")
 
-    l, loc, rem = extract_mad_local_remote(lcsn)
-    ax.plot(l, loc, color=C_COGNN, marker=MARKER_COGNN, linestyle="-",
-            label="CoGNN — MAD$_{local}$")
-    ax.plot(l, rem, color=C_COGNN, marker=MARKER_COGNN, linestyle="--",
-            label="CoGNN — MAD$_{remote}$")
+    def _plot(layers, vals, vals_std, model_key, part_key, label):
+        has_err = not np.all(np.isnan(vals_std))
+        style = _MAD_LOCAL_REMOTE_STYLE[(model_key, part_key)]
+        ax.errorbar(layers, vals, yerr=vals_std if has_err else None,
+                    label=label,
+                    ecolor=_lighten(style["color"]) if has_err else style["color"],
+                    elinewidth=1.2, capsize=4, capthick=1.2,
+                    **style)
+
+    l, loc, loc_sd, rem, rem_sd = extract_mad_local_remote(baseline)
+    _plot(l, loc, loc_sd, "baseline", "local",  "Baseline — MAD$_{local}$")
+    _plot(l, rem, rem_sd, "baseline", "remote", "Baseline — MAD$_{remote}$")
+
+    l, loc, loc_sd, rem, rem_sd = extract_mad_local_remote(lcsn)
+    _plot(l, loc, loc_sd, "cognn", "local",  "CoGNN — MAD$_{local}$")
+    _plot(l, rem, rem_sd, "cognn", "remote", "CoGNN — MAD$_{remote}$")
 
     ax.set_xlabel("Number of GCN layers")
     ax.set_ylabel("MAD (mean average distance)")
@@ -216,13 +234,17 @@ def plot_mad_all(ax, baseline, lcsn, prop_label: str):
     representational diversity, regardless of the local/remote sign issue.
     """
     l, mad, mad_std = extract_mad_all(baseline)
-    ax.errorbar(l, mad, yerr=mad_std if not np.all(np.isnan(mad_std)) else None,
+    has_err = not np.all(np.isnan(mad_std))
+    ax.errorbar(l, mad, yerr=mad_std if has_err else None,
                 color=C_BASELINE, marker=MARKER_BASELINE, label="Baseline (dense)",
-                capsize=4, capthick=1.5)
+                ecolor=_lighten(C_BASELINE) if has_err else C_BASELINE,
+                elinewidth=1.2, capsize=4, capthick=1.2)
     l, mad, mad_std = extract_mad_all(lcsn)
-    ax.errorbar(l, mad, yerr=mad_std if not np.all(np.isnan(mad_std)) else None,
+    has_err = not np.all(np.isnan(mad_std))
+    ax.errorbar(l, mad, yerr=mad_std if has_err else None,
                 color=C_COGNN, marker=MARKER_COGNN, label="CoGNN (pruned)",
-                capsize=4, capthick=1.5)
+                ecolor=_lighten(C_COGNN) if has_err else C_COGNN,
+                elinewidth=1.2, capsize=4, capthick=1.2)
 
     ax.set_xlabel("Number of GCN layers")
     ax.set_ylabel("MAD$_{all}$ (mean average distance)")
@@ -250,9 +272,11 @@ def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
     """Fill two axes: left=NumRank vs depth, right=Erank vs depth."""
 
     def _plot(ax, layers, vals, vals_std, color, marker, label):
-        ax.errorbar(layers, vals, yerr=vals_std if not np.all(np.isnan(vals_std)) else None,
+        has_err = not np.all(np.isnan(vals_std))
+        ax.errorbar(layers, vals, yerr=vals_std if has_err else None,
                     color=color, marker=marker, label=label,
-                    capsize=4, capthick=1.5)
+                    ecolor=_lighten(color) if has_err else color,
+                    elinewidth=1.2, capsize=4, capthick=1.2)
 
     l, num, num_sd, _, _ = extract_rank_metrics(baseline)
     _plot(ax_num, l, num, num_sd, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
@@ -375,22 +399,29 @@ def plot_oversquashing(ax, baseline, lcsn, prop_label: str,
     sens_base = extract_sensitivity(baseline, max_d)
     sens_lcsn = extract_sensitivity(lcsn, max_d)
 
-    ls_cycle = ["-", "--", ":"]
+    # Depth is now encoded by color shade (not linestyle): each selected
+    # depth gets its own color, drawn from a "Blues" ramp for baseline and
+    # an "Oranges" ramp for CoGNN, so model identity (hue family) and depth
+    # (shade) are both visible without relying on dashed/dotted lines.
+    n = max(len(selected_layers), 1)
+    shades = np.linspace(0.4, 0.95, n)
+    base_colors  = [plt.get_cmap("Blues")(s)   for s in shades]
+    cognn_colors = [plt.get_cmap("Oranges")(s) for s in shades]
+
     for i, n_layers in enumerate(selected_layers):
-        ls = ls_cycle[i % len(ls_cycle)]
         if n_layers in sens_base:
             m, s = sens_base[n_layers]
-            ax.plot(distances, m, color=C_BASELINE, linestyle=ls,
+            ax.plot(distances, m, color=base_colors[i],
                     marker=MARKER_BASELINE,
                     label=f"Baseline gn={n_layers}")
-            ax.fill_between(distances, m - s, m + s, color=C_BASELINE, alpha=0.12)
+            ax.fill_between(distances, m - s, m + s, color=base_colors[i], alpha=0.15)
 
         if n_layers in sens_lcsn:
             m, s = sens_lcsn[n_layers]
-            ax.plot(distances, m, color=C_COGNN, linestyle=ls,
+            ax.plot(distances, m, color=cognn_colors[i],
                     marker=MARKER_COGNN,
                     label=f"CoGNN gn={n_layers}")
-            ax.fill_between(distances, m - s, m + s, color=C_COGNN, alpha=0.12)
+            ax.fill_between(distances, m - s, m + s, color=cognn_colors[i], alpha=0.15)
 
     ax.set_yscale("log")
     ax.set_xlabel("Graph distance $d(i, j)$")
