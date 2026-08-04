@@ -139,6 +139,12 @@ def extract_sensitivity(records: list[dict], max_d: int = 6
 # Figure 1 — Oversmoothing (MAE + MADGap vs depth)
 # ---------------------------------------------------------------------------
 
+def _mae_unit(prop_label: str) -> str:
+    """Band gap (E_g) is reported in eV; formation energy (E_f) is reported
+    per atom, eV/atom (see data_prep_generalizability.py)."""
+    return "eV/atom" if "E_f" in prop_label else "eV"
+
+
 def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
     """Fill two axes: left=MAE vs layers, right=MADGap vs layers."""
 
@@ -155,7 +161,7 @@ def plot_oversmoothing(ax_mae, ax_mad, baseline, lcsn, prop_label: str):
     l, m, ms = extract_mae(lcsn)
     _plot(ax_mae, l, m, ms, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
     ax_mae.set_xlabel("Number of GCN layers")
-    ax_mae.set_ylabel(f"Test MAE (eV)")
+    ax_mae.set_ylabel(f"Test MAE ({_mae_unit(prop_label)})")
     ax_mae.set_title(f"{prop_label} — Test MAE vs depth")
     ax_mae.legend()
     ax_mae.set_xticks(sorted(set(list(extract_mae(baseline)[0]) + list(extract_mae(lcsn)[0]))))
@@ -303,9 +309,8 @@ def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
 # ---------------------------------------------------------------------------
 # Figure 1e — MAE panel | Rank panel (NumRank + Erank on a twin axis), side
 # by side, one row per property. Real units throughout — no normalization.
-# Each panel carries a short, generic caption ("MAE vs GCN layers" /
-# "Rank vs GCN layers"); the property name itself lives in the MAE panel's
-# y-axis label so it isn't repeated in both captions.
+# Each panel's caption is prefixed with the property label
+# ("MP $E_g$ — MAE vs GCN layers" / "MP $E_g$ — Rank vs GCN layers").
 # ---------------------------------------------------------------------------
 
 def _lighten(hex_color: str, factor: float = 0.55) -> str:
@@ -345,8 +350,8 @@ def plot_mae_panel(ax, baseline, lcsn, prop_label: str):
     l, m, ms = extract_mae(lcsn)
     _plot(l, m, ms, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
     ax.set_xlabel("Number of GCN layers")
-    ax.set_ylabel(f"{prop_label} — Test MAE (eV)")
-    ax.set_title("MAE vs GCN layers")
+    ax.set_ylabel(f"{prop_label} — Test MAE ({_mae_unit(prop_label)})")
+    ax.set_title(f"{prop_label} — MAE vs GCN layers")
     ax.set_xticks(sorted(set(l.tolist())))
     ax.legend(fontsize=9)
 
@@ -377,7 +382,7 @@ def plot_rank_panel(ax, baseline, lcsn, prop_label: str):
     ax_num.set_xlabel("Number of GCN layers")
     ax_num.set_ylabel("Numerical Rank")
     ax_erk.set_ylabel("Effective Rank")
-    ax_num.set_title("Rank vs GCN layers")
+    ax_num.set_title(f"{prop_label} — Rank vs GCN layers")
     ax_num.set_xticks(sorted(set(l_b.tolist()) | set(l_c.tolist())))
 
     h1, lab1 = ax_num.get_legend_handles_labels()
