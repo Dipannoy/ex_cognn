@@ -31,7 +31,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.lines import Line2D
 
 # ---------------------------------------------------------------------------
 # Style
@@ -277,11 +276,10 @@ def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
 
 
 # ---------------------------------------------------------------------------
-# Figure 1e — Combined: MAE, NumRank, Erank vs depth (one row per property)
-#
-# Puts accuracy and both rank metrics side by side on the same x-axis so a
-# reader can see in one glance whether a rank gap between models lines up
-# with (or diverges from) the accuracy gap at the same depths.
+# Figure 1e — MAE panel | Rank panel (NumRank + Erank on a twin axis), side
+# by side, one row per property. Real units throughout — no normalization.
+# No titles: figure captions belong in the manuscript LaTeX, not baked into
+# the image.
 # ---------------------------------------------------------------------------
 
 def _lighten(hex_color: str, factor: float = 0.55) -> str:
@@ -292,65 +290,71 @@ def _lighten(hex_color: str, factor: float = 0.55) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-_METRIC_STYLE = {
-    # linestyle + marker encode *metric*; color (passed separately) encodes model
-    "mae":     dict(linestyle="-",  marker="o", markersize=6),
-    "numrank": dict(linestyle="--", marker="s", markersize=6),
-    "erank":   dict(linestyle=":",  marker="^", markersize=6),
+_METRIC_LABEL = {"numrank": "NumRank", "erank": "Erank"}
+_MODEL_LABEL  = {"baseline": "Baseline", "cognn": "CoGNN"}
+
+# Four distinct colors for the rank panel's two metrics x two models — cool
+# hues for baseline, warm hues for CoGNN (same convention as everywhere
+# else); marker shape is a secondary cue for which metric a line is.
+_RANK_SERIES_STYLE = {
+    ("baseline", "numrank"): dict(color="#009E73", marker="s"),   # green
+    ("cognn",    "numrank"): dict(color="#D55E00", marker="s"),   # vermillion
+    ("baseline", "erank"):   dict(color="#56B4E9", marker="^"),   # sky blue
+    ("cognn",    "erank"):   dict(color="#CC79A7", marker="^"),   # purple
 }
 
 
-def plot_rank_mae_combined(ax, baseline, lcsn, prop_label: str):
-    """Overlay MAE, NumRank and Erank vs depth on a single axis.
+def plot_mae_panel(ax, baseline, lcsn, prop_label: str):
+    """MAE vs depth, real units, with error bars. No title."""
 
-    The three metrics live on very different scales (MAE ~0.4 eV, NumRank
-    ~2, Erank ~30), so each gets its own y-axis (MAE on the left, NumRank
-    and Erank stacked on the right). Color still encodes model (blue =
-    baseline, orange = CoGNN, matching every other figure); linestyle and
-    marker shape encode which metric a line belongs to (solid circle = MAE,
-    dashed square = NumRank, dotted triangle = Erank).
-    """
-    ax_mae   = ax
-    ax_num   = ax.twinx()
-    ax_erank = ax.twinx()
-    ax_erank.spines["right"].set_position(("axes", 1.16))
-    ax_erank.set_frame_on(True)
-    ax_erank.patch.set_visible(False)
-
-    def _plot(ax_, layers, vals, vals_std, color, key):
+    def _plot(layers, vals, vals_std, color, marker, label):
         has_err = not np.all(np.isnan(vals_std))
+        ax.errorbar(layers, vals, yerr=vals_std if has_err else None,
+                    color=color, marker=marker, label=label,
+                    ecolor=_lighten(color) if has_err else color,
+                    elinewidth=1.2, capsize=4, capthick=1.2)
+
+    l, m, ms = extract_mae(baseline)
+    _plot(l, m, ms, C_BASELINE, MARKER_BASELINE, "Baseline (dense)")
+    l, m, ms = extract_mae(lcsn)
+    _plot(l, m, ms, C_COGNN, MARKER_COGNN, "CoGNN (pruned)")
+    ax.set_xlabel("Number of GCN layers")
+    ax.set_ylabel(f"{prop_label} — Test MAE (eV)")
+    ax.set_xticks(sorted(set(l.tolist())))
+    ax.legend(fontsize=9)
+
+
+def plot_rank_panel(ax, baseline, lcsn, prop_label: str):
+    """NumRank (left axis) + Erank (right axis) vs depth, real units. No title."""
+    ax_num = ax
+    ax_erk = ax.twinx()
+
+    def _plot(ax_, layers, vals, vals_std, model_key, metric_key):
+        has_err = not np.all(np.isnan(vals_std))
+        style = _RANK_SERIES_STYLE[(model_key, metric_key)]
+        label = f"{_MODEL_LABEL[model_key]} — {_METRIC_LABEL[metric_key]}"
         ax_.errorbar(layers, vals, yerr=vals_std if has_err else None,
-                     color=color, ecolor=_lighten(color) if has_err else color,
+                     linestyle="-", markersize=6.5, label=label,
+                     ecolor=_lighten(style["color"]) if has_err else style["color"],
                      elinewidth=1.0, capsize=3, capthick=1.0,
-                     **_METRIC_STYLE[key])
+                     **style)
 
-    all_layers = set()
-    for records, color in [(baseline, C_BASELINE), (lcsn, C_COGNN)]:
-        l, m, ms = extract_mae(records)
-        _plot(ax_mae, l, m, ms, color, "mae")
+    l_b, num_b, num_b_sd, erk_b, erk_b_sd = extract_rank_metrics(baseline)
+    l_c, num_c, num_c_sd, erk_c, erk_c_sd = extract_rank_metrics(lcsn)
 
-        l, num, num_sd, erk, erk_sd = extract_rank_metrics(records)
-        _plot(ax_num, l, num, num_sd, color, "numrank")
-        _plot(ax_erank, l, erk, erk_sd, color, "erank")
-        all_layers.update(l.tolist())
+    _plot(ax_num, l_b, num_b, num_b_sd, "baseline", "numrank")
+    _plot(ax_num, l_c, num_c, num_c_sd, "cognn",    "numrank")
+    _plot(ax_erk, l_b, erk_b, erk_b_sd, "baseline", "erank")
+    _plot(ax_erk, l_c, erk_c, erk_c_sd, "cognn",    "erank")
 
-    ax_mae.set_xlabel("Number of GCN layers")
-    ax_mae.set_ylabel("Test MAE (eV)")
+    ax_num.set_xlabel("Number of GCN layers")
     ax_num.set_ylabel("Numerical Rank")
-    ax_erank.set_ylabel("Effective Rank")
-    ax_mae.set_title(f"{prop_label} — MAE, Numerical Rank & Effective Rank vs depth")
-    ax_mae.set_xticks(sorted(all_layers))
+    ax_erk.set_ylabel("Effective Rank")
+    ax_num.set_xticks(sorted(set(l_b.tolist()) | set(l_c.tolist())))
 
-    legend_handles = [
-        Line2D([], [], color=C_BASELINE, label="Baseline — MAE",     **_METRIC_STYLE["mae"]),
-        Line2D([], [], color=C_BASELINE, label="Baseline — NumRank", **_METRIC_STYLE["numrank"]),
-        Line2D([], [], color=C_BASELINE, label="Baseline — Erank",   **_METRIC_STYLE["erank"]),
-        Line2D([], [], color=C_COGNN,    label="CoGNN — MAE",        **_METRIC_STYLE["mae"]),
-        Line2D([], [], color=C_COGNN,    label="CoGNN — NumRank",    **_METRIC_STYLE["numrank"]),
-        Line2D([], [], color=C_COGNN,    label="CoGNN — Erank",      **_METRIC_STYLE["erank"]),
-    ]
-    ax_mae.legend(handles=legend_handles, fontsize=8, ncol=3,
-                  loc="upper center", bbox_to_anchor=(0.5, -0.22), frameon=False)
+    h1, lab1 = ax_num.get_legend_handles_labels()
+    h2, lab2 = ax_erk.get_legend_handles_labels()
+    ax_num.legend(h1 + h2, lab1 + lab2, fontsize=8, ncol=2, loc="best")
 
 
 # ---------------------------------------------------------------------------
@@ -497,18 +501,19 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
         plt.close(fig1d)
         print(f"Saved {p1d}")
 
-    # ── Figure 1e: Combined MAE + NumRank + Erank, one merged axis per property ─
+    # ── Figure 1e: MAE panel | Rank panel, side by side, one row per property ──
     with matplotlib.rc_context(MANUSCRIPT_RC):
-        fig1e, axes1e = plt.subplots(n_props, 1,
-                                     figsize=(8.5, 6.0 * n_props),
+        fig1e, axes1e = plt.subplots(n_props, 2,
+                                     figsize=(13.0, 5.0 * n_props),
                                      squeeze=False)
-        fig1e.subplots_adjust(right=0.82, hspace=0.85)
 
         for row, (prop_label, records) in enumerate(datasets):
             baseline, lcsn = split_by_model(records)
-            plot_rank_mae_combined(axes1e[row, 0], baseline, lcsn, prop_label)
+            plot_mae_panel(axes1e[row, 0], baseline, lcsn, prop_label)
+            plot_rank_panel(axes1e[row, 1], baseline, lcsn, prop_label)
 
         _label_panels(axes1e)
+        fig1e.tight_layout()
         p1e = os.path.join(out_dir, "rank_mae_combined.pdf")
         fig1e.savefig(p1e, bbox_inches="tight", dpi=300)
         fig1e.savefig(p1e.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
