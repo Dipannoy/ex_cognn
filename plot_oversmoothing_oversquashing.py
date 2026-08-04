@@ -31,6 +31,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.lines import Line2D
 
 # ---------------------------------------------------------------------------
 # Style
@@ -276,6 +277,83 @@ def plot_rank_metrics(ax_num, ax_erank, baseline, lcsn, prop_label: str):
 
 
 # ---------------------------------------------------------------------------
+# Figure 1e — Combined: MAE, NumRank, Erank vs depth (one row per property)
+#
+# Puts accuracy and both rank metrics side by side on the same x-axis so a
+# reader can see in one glance whether a rank gap between models lines up
+# with (or diverges from) the accuracy gap at the same depths.
+# ---------------------------------------------------------------------------
+
+def _lighten(hex_color: str, factor: float = 0.55) -> str:
+    """Blend a hex color toward white (factor=0 -> unchanged, 1 -> white)."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    r, g, b = (int(c + (255 - c) * factor) for c in (r, g, b))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+_METRIC_STYLE = {
+    # linestyle + marker encode *metric*; color (passed separately) encodes model
+    "mae":     dict(linestyle="-",  marker="o", markersize=6),
+    "numrank": dict(linestyle="--", marker="s", markersize=6),
+    "erank":   dict(linestyle=":",  marker="^", markersize=6),
+}
+
+
+def plot_rank_mae_combined(ax, baseline, lcsn, prop_label: str):
+    """Overlay MAE, NumRank and Erank vs depth on a single axis.
+
+    The three metrics live on very different scales (MAE ~0.4 eV, NumRank
+    ~2, Erank ~30), so each gets its own y-axis (MAE on the left, NumRank
+    and Erank stacked on the right). Color still encodes model (blue =
+    baseline, orange = CoGNN, matching every other figure); linestyle and
+    marker shape encode which metric a line belongs to (solid circle = MAE,
+    dashed square = NumRank, dotted triangle = Erank).
+    """
+    ax_mae   = ax
+    ax_num   = ax.twinx()
+    ax_erank = ax.twinx()
+    ax_erank.spines["right"].set_position(("axes", 1.16))
+    ax_erank.set_frame_on(True)
+    ax_erank.patch.set_visible(False)
+
+    def _plot(ax_, layers, vals, vals_std, color, key):
+        has_err = not np.all(np.isnan(vals_std))
+        ax_.errorbar(layers, vals, yerr=vals_std if has_err else None,
+                     color=color, ecolor=_lighten(color) if has_err else color,
+                     elinewidth=1.0, capsize=3, capthick=1.0,
+                     **_METRIC_STYLE[key])
+
+    all_layers = set()
+    for records, color in [(baseline, C_BASELINE), (lcsn, C_COGNN)]:
+        l, m, ms = extract_mae(records)
+        _plot(ax_mae, l, m, ms, color, "mae")
+
+        l, num, num_sd, erk, erk_sd = extract_rank_metrics(records)
+        _plot(ax_num, l, num, num_sd, color, "numrank")
+        _plot(ax_erank, l, erk, erk_sd, color, "erank")
+        all_layers.update(l.tolist())
+
+    ax_mae.set_xlabel("Number of GCN layers")
+    ax_mae.set_ylabel("Test MAE (eV)")
+    ax_num.set_ylabel("Numerical Rank")
+    ax_erank.set_ylabel("Effective Rank")
+    ax_mae.set_title(f"{prop_label} — MAE, Numerical Rank & Effective Rank vs depth")
+    ax_mae.set_xticks(sorted(all_layers))
+
+    legend_handles = [
+        Line2D([], [], color=C_BASELINE, label="Baseline — MAE",     **_METRIC_STYLE["mae"]),
+        Line2D([], [], color=C_BASELINE, label="Baseline — NumRank", **_METRIC_STYLE["numrank"]),
+        Line2D([], [], color=C_BASELINE, label="Baseline — Erank",   **_METRIC_STYLE["erank"]),
+        Line2D([], [], color=C_COGNN,    label="CoGNN — MAE",        **_METRIC_STYLE["mae"]),
+        Line2D([], [], color=C_COGNN,    label="CoGNN — NumRank",    **_METRIC_STYLE["numrank"]),
+        Line2D([], [], color=C_COGNN,    label="CoGNN — Erank",      **_METRIC_STYLE["erank"]),
+    ]
+    ax_mae.legend(handles=legend_handles, fontsize=8, ncol=3,
+                  loc="upper center", bbox_to_anchor=(0.5, -0.22), frameon=False)
+
+
+# ---------------------------------------------------------------------------
 # Figure 2 — Oversquashing (sensitivity vs distance)
 # ---------------------------------------------------------------------------
 
@@ -418,6 +496,24 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
         fig1d.savefig(p1d.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
         plt.close(fig1d)
         print(f"Saved {p1d}")
+
+    # ── Figure 1e: Combined MAE + NumRank + Erank, one merged axis per property ─
+    with matplotlib.rc_context(MANUSCRIPT_RC):
+        fig1e, axes1e = plt.subplots(n_props, 1,
+                                     figsize=(8.5, 6.0 * n_props),
+                                     squeeze=False)
+        fig1e.subplots_adjust(right=0.82, hspace=0.85)
+
+        for row, (prop_label, records) in enumerate(datasets):
+            baseline, lcsn = split_by_model(records)
+            plot_rank_mae_combined(axes1e[row, 0], baseline, lcsn, prop_label)
+
+        _label_panels(axes1e)
+        p1e = os.path.join(out_dir, "rank_mae_combined.pdf")
+        fig1e.savefig(p1e, bbox_inches="tight", dpi=300)
+        fig1e.savefig(p1e.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
+        plt.close(fig1e)
+        print(f"Saved {p1e}")
 
     # ── Figure 2: Oversquashing ────────────────────────────────────────────
     with matplotlib.rc_context(MANUSCRIPT_RC):
