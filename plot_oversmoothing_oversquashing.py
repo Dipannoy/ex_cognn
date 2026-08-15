@@ -576,6 +576,26 @@ def build_figures(json_eg: str | None, json_ef: str | None, out_dir: str):
         plt.close(fig1e)
         print(f"Saved {p1e}")
 
+    # ── Figure 1f: MAE | MADGap | Rank, side by side, one row per property ──
+    with matplotlib.rc_context(MANUSCRIPT_RC):
+        fig1f, axes1f = plt.subplots(n_props, 3,
+                                     figsize=(18.0, 5.0 * n_props),
+                                     squeeze=False)
+
+        for row, (prop_label, records) in enumerate(datasets):
+            baseline, lcsn = split_by_model(records)
+            plot_oversmoothing(axes1f[row, 0], axes1f[row, 1],
+                               baseline, lcsn, prop_label)
+            plot_rank_panel(axes1f[row, 2], baseline, lcsn, prop_label)
+
+        _label_panels(axes1f)
+        fig1f.tight_layout()
+        p1f = os.path.join(out_dir, "mae_madgap_rank_combined.pdf")
+        fig1f.savefig(p1f, bbox_inches="tight", dpi=300)
+        fig1f.savefig(p1f.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
+        plt.close(fig1f)
+        print(f"Saved {p1f}")
+
     # ── Figure 2: Oversquashing ────────────────────────────────────────────
     with matplotlib.rc_context(MANUSCRIPT_RC):
         fig2, axes2 = plt.subplots(1, n_props,

@@ -45,30 +45,30 @@ BASE = os.path.join(os.path.dirname(__file__), "downloaded_results/outputs_lates
 EXPERIMENTS = [
     {
         "row_label": r"JARVIS $E_{\rm g}$",
-        "theta_label": r"$\theta = 0.3$",
-        "threshold": 0.3,
-        "dir": os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_3_sw0_001"),
+        "theta_label": r"$\theta = 0.1$",
+        "threshold": 0.1,
+        "dir": os.path.join(BASE, "jarvis_eg_multiplicative_gate_scoring_net_th0_1_sw0_001"),
         "json_key": "test_jarvis_large_eg",
     },
     {
         "row_label": r"JARVIS $E_{\rm f}$",
-        "theta_label": r"$\theta = 0.5$",
-        "threshold": 0.5,
-        "dir": os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "theta_label": r"$\theta = 0.1$",
+        "threshold": 0.1,
+        "dir": os.path.join(BASE, "jarvis_ef_multiplicative_gate_scoring_net_th0_1_sw0_001"),
         "json_key": "test_jarvis_large_ef",
     },
     {
         "row_label": r"MP $E_{\rm g}$",
-        "theta_label": r"$\theta = 0.2$",
-        "threshold": 0.2,
-        "dir": os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001"),
+        "theta_label": r"$\theta = 0.1$",
+        "threshold": 0.1,
+        "dir": os.path.join(BASE, "mp_eg_multiplicative_gate_scoring_net_th0_1_sw0_001"),
         "json_key": "test_mp_large_eg",
     },
     {
         "row_label": r"MP $E_{\rm f}$",
-        "theta_label": r"$\theta = 0.5$",
-        "threshold": 0.5,
-        "dir": os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "theta_label": r"$\theta = 0.2$",
+        "threshold": 0.2,
+        "dir": os.path.join(BASE, "mp_ef_multiplicative_gate_scoring_net_th0_2_sw0_001"),
         "json_key": "test_mp_large_ef",
     },
 ]
@@ -322,8 +322,8 @@ with matplotlib.rc_context(MANUSCRIPT_RC):
         va="center", ha="center", rotation=90, bbox=label_bbox, zorder=5,
     )
 
-    out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_v2.pdf")
-    out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_v2.png")
+    out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_mgsn_all_folds_v2.pdf")
+    out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_mgsn_all_folds_v2.png")
     fig.savefig(out_pdf)
     fig.savefig(out_png)
     plt.close(fig)

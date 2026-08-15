@@ -40,36 +40,36 @@ BASE = os.path.join(os.path.dirname(__file__), "downloaded_results/outputs_lates
 EXPERIMENTS = [
     {
         "row_label":  r"JARVIS $E_{\rm g}$",
-        "theta":      r"$\theta = 0.3$",
-        "threshold":  0.3,
-        "dir":        os.path.join(BASE, "jarvis_eg_learnable_cutoff_scoring_net_th0_3_sw0_001"),
+        "theta":      r"$\theta = 0.1$",
+        "threshold":  0.1,
+        "dir":        os.path.join(BASE, "jarvis_eg_edge_only_scoring_net_th0_1_sw0_001"),
         "json_key":   "test_jarvis_large_eg",
         "png_name":   "explainability_test_jarvis_lg_cell_eg_all_folds.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"JARVIS $E_{\rm f}$",
-        "theta":      r"$\theta = 0.5$",
-        "threshold":  0.5,
-        "dir":        os.path.join(BASE, "jarvis_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "theta":      r"$\theta = 0.1$",
+        "threshold":  0.1,
+        "dir":        os.path.join(BASE, "jarvis_ef_edge_only_scoring_net_th0_1_sw0_001"),
         "json_key":   "test_jarvis_large_ef",
         "png_name":   "explainability_test_jarvis_lg_cell_ef_all_folds.png",
         "group":      "JARVIS",
     },
     {
         "row_label":  r"MP $E_{\rm g}$",
-        "theta":      r"$\theta = 0.2$",
-        "threshold":  0.2,
-        "dir":        os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001"),
+        "theta":      r"$\theta = 0.1$",
+        "threshold":  0.1,
+        "dir":        os.path.join(BASE, "mp_eg_edge_only_scoring_net_th0_1_sw0_001"),
         "json_key":   "test_mp_large_eg",
         "png_name":   "explainability_test_mp_lg_cell_eg_all_folds.png",
         "group":      "MP",
     },
     {
         "row_label":  r"MP $E_{\rm f}$",
-        "theta":      r"$\theta = 0.5$",
-        "threshold":  0.5,
-        "dir":        os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "theta":      r"$\theta = 0.1$",
+        "threshold":  0.1,
+        "dir":        os.path.join(BASE, "mp_eg_edge_only_scoring_net_th0_5_sw0_001"),
         "json_key":   "test_mp_large_ef",
         "png_name":   "explainability_test_mp_lg_cell_ef_all_folds.png",
         "group":      "MP",
@@ -466,8 +466,8 @@ fig.text(
 # ---------------------------------------------------------------------------
 # Save
 # ---------------------------------------------------------------------------
-out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_lcsn_all_folds.pdf")
-out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_lcsn_all_folds.png")
+out_pdf = os.path.join(os.path.dirname(__file__), "explainability_figure_eosn_all_folds_2.pdf")
+out_png = os.path.join(os.path.dirname(__file__), "explainability_figure_eosn_all_folds_2.png")
 
 fig.savefig(out_pdf, dpi=300, format="pdf")
 fig.savefig(out_png, dpi=300, format="png")

@@ -24,8 +24,8 @@ def get_atom_counts(pickle_path):
         return np.random.lognormal(mean=3.0, sigma=0.8, size=10000).astype(int)
 
 # Load your actual pickle files here
-jarvis_counts = get_atom_counts('./jarvis/Jarvis_full_ef/jarvis_cell_ef_full.pickle')
-mp_counts = get_atom_counts('./mp/MP_full_ef/mp_l_cell_ef_full.pickle')
+jarvis_counts = get_atom_counts('./jarvis/jarvis_lg_cell_ef.pickle')
+mp_counts = get_atom_counts('./mp/ef/mp_lg_unit_cell_ef.pickle')
 
 # ---------------------------------------------------------------------------
 # 2. Plot Configuration
