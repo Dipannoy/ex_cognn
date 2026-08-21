@@ -28,28 +28,28 @@ BASE = os.path.join(os.path.dirname(__file__), "downloaded_results/outputs_lates
 
 EXPERIMENTS = [
     {
-        "label":     "JARVIS E_g EOSN",
+        "label":     "mp E_f EOSN",
         "threshold": 0.1,
-        "dir":       os.path.join(BASE, "mp_eg_edge_only_scoring_net_th0_1_sw0_001"),
-        "json_key":  "test_mp_large_eg",
+        "dir":       os.path.join(BASE, "mp_ef_edge_only_scoring_net_th0_1_sw0_001"),
+        "json_key":  "test_mp_large_ef",
     },
     {
-        "label":     "JARVIS E_g ESN",
+        "label":     "mp E_f ESN",
         "threshold": 0.1,
-        "dir":       os.path.join(BASE, "mp_eg_edge_scoring_net_th0_1_sw0_001"),
-        "json_key":  "test_mp_large_eg",
+        "dir":       os.path.join(BASE, "mp_ef_edge_scoring_net_th0_1_sw0_001"),
+        "json_key":  "test_mp_large_ef",
     },
     {
-        "label":     "JARVIS E_g MGSN",
-        "threshold": 0.1,
-        "dir":       os.path.join(BASE, "mp_eg_multiplicative_gate_scoring_net_th0_1_sw0_001"),
-        "json_key":  "test_mp_large_eg",
-    },
-    {
-        "label":     "JARVIS E_g LCSN",
+        "label":     "mp E_f MGSN",
         "threshold": 0.2,
-        "dir":       os.path.join(BASE, "mp_eg_learnable_cutoff_scoring_net_th0_2_sw0_001"),
-        "json_key":  "test_mp_large_eg",
+        "dir":       os.path.join(BASE, "mp_ef_multiplicative_gate_scoring_net_th0_2_sw0_001"),
+        "json_key":  "test_mp_large_ef",
+    },
+    {
+        "label":     "mp E_f LCSN",
+        "threshold": 0.5,
+        "dir":       os.path.join(BASE, "mp_ef_learnable_cutoff_scoring_net_th0_5_sw0_001"),
+        "json_key":  "test_mp_large_ef",
     },
 ]
 

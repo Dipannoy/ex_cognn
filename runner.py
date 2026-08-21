@@ -42,6 +42,10 @@ class Runner:
         self.loss_fn = self.criterion(config.criterion)
 
         self.max_bond_forcing = config.model.max_bond_forcing
+        # Gumbel-Softmax mode, shared by training, validation and inference so the
+        # three stages can never drift apart. true = straight-through discrete,
+        # false = continuous relaxation.
+        self.is_hard = config.model.is_hard
         self.sparsity_weight = getattr(config, 'sparsity_weight', 0.0)
         self.num_epochs = config.epochs
         self.step_count = 0
@@ -415,7 +419,7 @@ class Runner:
 
             context = torch.enable_grad() if epoch % 5 == 0 else torch.no_grad()
             
-            out, survived_edges, w_bonds, _, _ = self.model((g, lg), keep_bond_forcing, context, False)
+            out, survived_edges, w_bonds, _, _ = self.model((g, lg), keep_bond_forcing, context, self.is_hard)
             task_loss = self.loss_fn(out, y)
             sparsity_loss = self.sparsity_weight * w_bonds.mean() if self.sparsity_weight > 0 and w_bonds is not None else 0.
             loss = task_loss + sparsity_loss
@@ -463,7 +467,7 @@ class Runner:
             tot_ng += ng
 
             context = torch.no_grad()
-            out, survived_edges,_,_,_ = self.model((g, lg), keep_bond_forcing, context, True)
+            out, survived_edges,_,_,_ = self.model((g, lg), keep_bond_forcing, context, self.is_hard)
             loss = self.loss_fn(out, y)
             avgloss += loss.detach().item() * ng
             avg_se = self.cal_dict(survived_edges, avg_se, mul=ng)
@@ -675,7 +679,7 @@ class Runner:
             graph_output_dir = key+'_'+suffix+'_graphs'
             torch.cuda.synchronize(self.device)
             t0 = time.time()
-            pred, survived_edges,edge_status,in_logit,out_logit  = self.model((g, lg), keep_bond_forcing=False,is_hard=False,is_eval=True)
+            pred, survived_edges,edge_status,in_logit,out_logit  = self.model((g, lg), keep_bond_forcing=False,is_hard=self.is_hard,is_eval=True)
             torch.cuda.synchronize(self.device)
             t1 = time.time()
             total_inference_time += t1 - t0
