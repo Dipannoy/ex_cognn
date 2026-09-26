@@ -125,7 +125,11 @@ def find_edge_retention_rate(json_pattern, threshold):
             
             # Tally the edges
             total_edges_in_fold += len(weights_arr)
-            kept_edges_in_fold += np.sum(weights_arr >= threshold)
+            # An edge is "kept" iff it carries non-zero weight into message passing.
+            # In soft mode the model has already zeroed sub-threshold weights, so this
+            # is identical to `>= threshold`; in hard mode the weights are already 0/1
+            # and `threshold` is 0.0, where `>= threshold` would count every edge.
+            kept_edges_in_fold += np.sum(weights_arr > 0)
             
         # Calculate stats for this specific fold
         if total_edges_in_fold > 0:

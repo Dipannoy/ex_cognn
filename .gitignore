@@ -8,6 +8,7 @@
 *.pkl
 *.tex
 *.pdf
+*.bib
 outputs/
 downloaded_results/
 datasets/jarvis/jarvis_all_cifs/
@@ -19,3 +20,6 @@ datasets/mp/mp_eg_old_version/
 datasets/mp/mp_large_062326/
 datasets/mp/mp_all_cifs/
 datasets/mp/ef/mp_ef_old_version/
+digital_discovery/
+royal-society-of-chemistry-article-template/
+royal-society-of-chemistry-article-template.zip

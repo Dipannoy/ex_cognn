@@ -123,7 +123,11 @@ def find_edge_retention_rate(json_pattern, threshold):
             
             # Tally the edges
             total_edges_in_fold += len(weights_arr)
-            kept_edges_in_fold += np.sum(weights_arr >= threshold)
+            # An edge is "kept" iff it carries non-zero weight into message passing.
+            # In soft mode the model has already zeroed sub-threshold weights, so this
+            # is identical to `>= threshold`; in hard mode the weights are already 0/1
+            # and `threshold` is 0.0, where `>= threshold` would count every edge.
+            kept_edges_in_fold += np.sum(weights_arr > 0)
             
         # Calculate stats for this specific fold
         if total_edges_in_fold > 0:
@@ -294,6 +298,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
     global_row = [
         dataset_tag,
         action_net,
+        bool(config.model.is_hard),
         float(edge_threshold),
         float(sparsity_weight),
         float(init_r_cut),
@@ -309,7 +314,7 @@ def main(root_dir, alignn_layer, output_dir, cutoff, max_neighbors, edge_thresho
         output_dir,
     ]
     global_header = [
-        'dataset', 'action_net', 'threshold', 'sparsity_weight',
+        'dataset', 'action_net', 'is_hard', 'threshold', 'sparsity_weight',
         'init_r_cut', 'graph_cutoff', 'max_neighbors', 'gcn_layer',
         'train_mean', 'train_std',
         'val_mean',   'val_std',
