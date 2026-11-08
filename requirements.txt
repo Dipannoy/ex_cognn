@@ -1,0 +1,10 @@
+torch
+dgl
+torch_geometric
+jarvis-tools
+numpy
+pandas
+scikit-learn
+matplotlib
+omegaconf
+tqdm
